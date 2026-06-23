@@ -339,6 +339,26 @@ class DiceRoller {
         });
     }
 
+    updateCameraTracking() {
+        if (this.dice.length === 0) return;
+        const die = this.dice[0];
+
+        // Track the die if it's currently falling/rolling and result hasn't been declared
+        if (this.isRolling && !die.resultDeclared) {
+            // Smoothly follow the die's Y position to keep it in view
+            // We use a slightly dampened X follow to keep the die reasonably centered
+            const trackY = Math.max(this.BIN_Y + 8, die.mesh.position.y);
+            this.cameraTargetPos.y = trackY;
+            this.cameraTargetLookAt.y = trackY;
+
+            this.cameraTargetPos.x = die.mesh.position.x * 0.5;
+            this.cameraTargetLookAt.x = die.mesh.position.x * 0.5;
+
+            // Maintain overview distance until result is declared
+            this.cameraTargetPos.z = 40;
+        }
+    }
+
     rollDice() {
         if (this.isRolling) return;
         this.isRolling = true;
@@ -362,6 +382,7 @@ class DiceRoller {
         requestAnimationFrame(() => this.animate());
         this.world.step(1/60);
         this.updatePhysicsObjects();
+        this.updateCameraTracking();
         this.dice.forEach(die => this.checkDiceResult(die));
 
         // Smooth camera movement
