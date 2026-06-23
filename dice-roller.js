@@ -119,7 +119,7 @@ class DiceRoller {
         
         const pinMesh = new THREE.Mesh(pinGeometry, pinMaterial);
         pinMesh.position.set(x, y, 0);
-        pinMesh.rotation.set(Math.PI / 2, 0, Math.PI / 4);
+        pinMesh.rotation.set(0, 0, Math.PI / 4);
         pinMesh.castShadow = true;
         this.scene.add(pinMesh);
         
@@ -135,9 +135,8 @@ class DiceRoller {
         pinBody.position.set(x, y, 0);
 
         // Rotate the box so its faces are angled (diamond shape from front view)
-        // and also rotate it to point towards the camera
         const quat = new CANNON.Quaternion();
-        quat.setFromEuler(Math.PI / 2, 0, Math.PI / 4);
+        quat.setFromEuler(0, 0, Math.PI / 4);
         pinBody.quaternion.copy(quat);
         
         this.world.addBody(pinBody);
