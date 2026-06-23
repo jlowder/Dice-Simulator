@@ -13,7 +13,7 @@ class DiceRoller {
         this.PIN_DEPTH = 4;
         this.WALL_X = 28;
         this.WALL_HEIGHT = 50;
-        this.WALL_DEPTH = 10;
+        this.WALL_DEPTH = 4;
         this.BIN_Y = -12;
         this.DICE_SIZE = 1.5;
         this.SPAWN_Y = 40;
