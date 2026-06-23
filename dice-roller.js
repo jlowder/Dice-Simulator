@@ -18,6 +18,15 @@ class DiceRoller {
         this.DICE_SIZE = 1.5;
         this.SPAWN_Y = 40;
 
+        // Camera constants
+        this.CAMERA_DEFAULT_POS = new THREE.Vector3(0, 12, 40);
+        this.CAMERA_DEFAULT_LOOKAT = new THREE.Vector3(0, 12, 0);
+        this.CAMERA_LERP_FACTOR = 0.05;
+
+        this.cameraTargetPos = this.CAMERA_DEFAULT_POS.clone();
+        this.cameraTargetLookAt = this.CAMERA_DEFAULT_LOOKAT.clone();
+        this.cameraCurrentLookAt = this.CAMERA_DEFAULT_LOOKAT.clone();
+
         this.pinMaterial = null;
         this.binMaterial = null;
         this.wallMaterial = null;
@@ -37,8 +46,8 @@ class DiceRoller {
         this.scene.background = new THREE.Color(0x1a1a2e);
         
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 12, 40);
-        this.camera.lookAt(0, 12, 0);
+        this.camera.position.copy(this.CAMERA_DEFAULT_POS);
+        this.camera.lookAt(this.CAMERA_DEFAULT_LOOKAT);
         
         const canvas = document.getElementById('canvas');
         if (!canvas) {
@@ -134,7 +143,7 @@ class DiceRoller {
         // Side walls
         this.createWall(-this.WALL_X, wallThickness, this.WALL_HEIGHT, 0, this.WALL_DEPTH);
         this.createWall(this.WALL_X, wallThickness, this.WALL_HEIGHT, 0, this.WALL_DEPTH);
-        
+
         // Front and back walls
         this.createWall(0, this.WALL_X * 2, this.WALL_HEIGHT, this.WALL_DEPTH/2, 0.5, 0.05);
         this.createWall(0, this.WALL_X * 2, this.WALL_HEIGHT, -this.WALL_DEPTH/2, 0.5, 0.05);
@@ -231,6 +240,7 @@ class DiceRoller {
         ));
         
         this.floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+        this.floorBody.position.set(0, -10, 0);
         this.floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
         this.world.addBody(this.floorBody);
     }
@@ -333,6 +343,10 @@ class DiceRoller {
         if (this.isRolling) return;
         this.isRolling = true;
         
+        // Reset camera
+        this.cameraTargetPos.copy(this.CAMERA_DEFAULT_POS);
+        this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
+
         this.dice.forEach(die => {
             die.body.position.set((Math.random() - 0.5) * 10, this.SPAWN_Y, 0);
             die.body.velocity.set((Math.random() - 0.5) * 2, -10, 0);
@@ -349,6 +363,12 @@ class DiceRoller {
         this.world.step(1/60);
         this.updatePhysicsObjects();
         this.dice.forEach(die => this.checkDiceResult(die));
+
+        // Smooth camera movement
+        this.camera.position.lerp(this.cameraTargetPos, this.CAMERA_LERP_FACTOR);
+        this.cameraCurrentLookAt.lerp(this.cameraTargetLookAt, this.CAMERA_LERP_FACTOR);
+        this.camera.lookAt(this.cameraCurrentLookAt);
+
         this.renderer.render(this.scene, this.camera);
     }
 
@@ -356,12 +376,20 @@ class DiceRoller {
         if (die.resultDeclared) return;
         
         // Die is roughly in a bin and stopped
-        if (die.body.velocity.length() < 0.2 && Math.abs(die.mesh.position.y - (this.BIN_Y + 1)) < 2) {
+        const isNearBins = Math.abs(die.mesh.position.y - (this.BIN_Y + 1)) < 3;
+        const isStopped = die.body.velocity.length() < 0.3;
+
+        if (isStopped && isNearBins) {
             for (let bin of this.bins) {
                 if (die.mesh.position.x >= bin.x - bin.width/2 && 
                     die.mesh.position.x <= bin.x + bin.width/2) {
+                    console.log(`Result detected: bin ${bin.multiplier}`);
                     this.displayResult(die.sides, bin.multiplier);
                     die.resultDeclared = true;
+
+                    // Zoom in on die
+                    this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + 3, 8);
+                    this.cameraTargetLookAt.copy(die.mesh.position);
                     break;
                 }
             }
