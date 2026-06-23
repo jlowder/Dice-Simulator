@@ -413,7 +413,7 @@ class DiceRoller {
                 if (die.mesh.position.x >= bin.x - bin.width/2 && 
                     die.mesh.position.x <= bin.x + bin.width/2) {
                     console.log(`Result detected: bin ${bin.multiplier}`);
-                    this.displayResult(die.sides, bin.multiplier);
+                    this.displayResult(die, bin.multiplier);
                     die.resultDeclared = true;
 
                     // Zoom in on die
@@ -425,22 +425,49 @@ class DiceRoller {
         }
 
         if (!die.resultDeclared && die.mesh.position.y < -15) {
-            this.displayResult(die.sides, 0);
+            this.displayResult(die, 0);
             die.resultDeclared = true;
         }
     }
 
-    displayResult(sides, multiplier) {
+    getDieRollValue(die) {
+        const faceVectors = [
+            { vector: new THREE.Vector3(1, 0, 0), value: 1 },  // +X
+            { vector: new THREE.Vector3(-1, 0, 0), value: 6 }, // -X
+            { vector: new THREE.Vector3(0, 1, 0), value: 2 },  // +Y
+            { vector: new THREE.Vector3(0, -1, 0), value: 5 }, // -Y
+            { vector: new THREE.Vector3(0, 0, 1), value: 3 },  // +Z
+            { vector: new THREE.Vector3(0, 0, -1), value: 4 }  // -Z
+        ];
+
+        let maxUp = -1;
+        let topValue = 1;
+
+        const worldUp = new THREE.Vector3(0, 1, 0);
+
+        faceVectors.forEach(face => {
+            const worldVector = face.vector.clone().applyQuaternion(die.mesh.quaternion);
+            const dot = worldVector.dot(worldUp);
+            if (dot > maxUp) {
+                maxUp = dot;
+                topValue = face.value;
+            }
+        });
+
+        return topValue;
+    }
+
+    displayResult(die, multiplier) {
         const resultEl = document.getElementById('result');
         if (!resultEl) return;
         
-        const dieValue = Math.floor(Math.random() * sides) + 1;
+        const dieValue = this.getDieRollValue(die);
         const displayMultiplier = multiplier >= 1 ? multiplier : 'x' + multiplier;
         
-        resultEl.textContent = `Rolled ${dieValue} (Multiplier: ${displayMultiplier})`;
+        resultEl.textContent = `Rolled ${dieValue} (Score Multiplier: ${displayMultiplier})`;
         resultEl.classList.add('show');
         
-        setTimeout(() => { resultEl.classList.remove('show'); }, 3000);
+        setTimeout(() => { resultEl.classList.remove('show'); }, 5000);
     }
 }
 
