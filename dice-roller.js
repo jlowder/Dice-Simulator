@@ -10,9 +10,9 @@ class DiceRoller {
         // Configuration Constants
         this.PIN_SPACING = 6.0;
         this.PIN_RADIUS = 0.3;
-        this.PIN_DEPTH = 4;
+        this.PIN_DEPTH = 10;
         this.WALL_X = 28;
-        this.WALL_HEIGHT = 50;
+        this.WALL_HEIGHT = 60;
         this.WALL_DEPTH = 10;
         this.BIN_Y = -12;
         this.DICE_SIZE = 1.5;
@@ -109,7 +109,8 @@ class DiceRoller {
     }
 
     createPin(x, y, radius) {
-        const pinGeometry = new THREE.CylinderGeometry(radius, radius, this.PIN_DEPTH, 32);
+        const sideLen = radius * 0.707;
+        const pinGeometry = new THREE.BoxGeometry(sideLen * 2, sideLen * 2, this.PIN_DEPTH);
         const pinMaterial = new THREE.MeshStandardMaterial({
             color: 0xffd700,
             metalness: 0.6,
@@ -118,14 +119,13 @@ class DiceRoller {
         
         const pinMesh = new THREE.Mesh(pinGeometry, pinMaterial);
         pinMesh.position.set(x, y, 0);
-        pinMesh.rotation.x = Math.PI / 2;
+        pinMesh.rotation.set(Math.PI / 2, 0, Math.PI / 4);
         pinMesh.castShadow = true;
         this.scene.add(pinMesh);
         
         // Use a Box shape rotated as a diamond for better collision behavior in Cannon.js
         // Box vs Box collisions are much more stable and accurate than Cylinder vs Box
         // To match visual radius, sideLen * sqrt(2) should be roughly the radius
-        const sideLen = radius * 0.707;
         const pinShape = new CANNON.Box(new CANNON.Vec3(sideLen, sideLen, this.PIN_DEPTH / 2));
         const pinBody = new CANNON.Body({
             mass: 0,
@@ -167,7 +167,8 @@ class DiceRoller {
         });
         
         const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
-        wallMesh.position.set(x, height/2 - 5, z);
+        // Set wall to start at floor level (y = -10)
+        wallMesh.position.set(x, height/2 - 10, z);
         this.scene.add(wallMesh);
         
         const wallShape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
@@ -176,7 +177,7 @@ class DiceRoller {
             shape: wallShape,
             material: this.wallMaterial
         });
-        wallBody.position.set(x, height/2 - 5, z);
+        wallBody.position.set(x, height/2 - 10, z);
         this.world.addBody(wallBody);
         
         this.walls.push({ mesh: wallMesh, body: wallBody });
@@ -196,7 +197,7 @@ class DiceRoller {
     }
 
     createBin(x, y, width, height, i) {
-        const binGeometry = new THREE.BoxGeometry(width, height, 4);
+        const binGeometry = new THREE.BoxGeometry(width, height, this.WALL_DEPTH);
         const binMaterial = new THREE.MeshStandardMaterial({
             color: 0x4a6fa5,
             metalness: 0.3,
@@ -207,7 +208,7 @@ class DiceRoller {
         binMesh.position.set(x, y, 0);
         this.scene.add(binMesh);
         
-        const binShape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, 2));
+        const binShape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, this.WALL_DEPTH/2));
         const binBody = new CANNON.Body({
             mass: 0,
             shape: binShape,
@@ -229,6 +230,7 @@ class DiceRoller {
     initCannonJS() {
         this.world = new CANNON.World();
         this.world.gravity.set(0, -9.82, 0);
+        this.world.allowSleep = true;
         
         this.diceMaterial = new CANNON.Material('dice');
         this.pinMaterial = new CANNON.Material('pin');
@@ -249,6 +251,7 @@ class DiceRoller {
         this.floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
         this.floorBody.position.set(0, -10, 0);
         this.floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+        this.floorBody.material = this.floorMaterial;
         this.world.addBody(this.floorBody);
     }
 
@@ -306,9 +309,11 @@ class DiceRoller {
             mass: 1,
             shape: new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2)),
             material: this.diceMaterial,
-            angularDamping: 0.05,
-            linearDamping: 0.01,
-            allowSleep: false
+            angularDamping: 0.15,
+            linearDamping: 0.1,
+            allowSleep: true,
+            sleepSpeedLimit: 0.5,
+            sleepTimeLimit: 1.0
         });
         
         body.position.set(0, this.SPAWN_Y, 0);
@@ -352,7 +357,7 @@ class DiceRoller {
         const die = this.dice[0];
 
         // Track the die if it's currently falling/rolling and result hasn't been declared
-        if (this.isRolling && !die.resultDeclared) {
+        if (!die.resultDeclared && die.mesh.position.y < this.SPAWN_Y) {
             // Smoothly follow the die's Y position to keep it in view
             // We use a slightly dampened X follow to keep the die reasonably centered
             const trackY = Math.max(this.BIN_Y + 8, die.mesh.position.y);
@@ -376,6 +381,7 @@ class DiceRoller {
         this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
 
         this.dice.forEach(die => {
+            die.body.wakeUp();
             die.body.position.set((Math.random() - 0.5) * 10, this.SPAWN_Y, 0);
             die.body.velocity.set((Math.random() - 0.5) * 2, -10, 0);
             die.body.angularVelocity.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20);
@@ -383,7 +389,7 @@ class DiceRoller {
             die.resultDeclared = false;
         });
         
-        setTimeout(() => { this.isRolling = false; }, 8000);
+        setTimeout(() => { this.isRolling = false; }, 2000);
     }
 
     animate() {
@@ -404,27 +410,56 @@ class DiceRoller {
     checkDiceResult(die) {
         if (die.resultDeclared) return;
         
-        // Die is roughly in a bin and stopped
-        const isNearBins = Math.abs(die.mesh.position.y - (this.BIN_Y + 1)) < 3;
-        const isStopped = die.body.velocity.length() < 0.3;
+        // Die is at the bottom and stopped (or sleeping)
+        const isAtBottom = die.mesh.position.y < (this.BIN_Y + 10);
+        const isStopped = die.body.velocity.length() < 0.25 || die.body.sleepState === CANNON.Body.SLEEPING;
 
-        if (isStopped && isNearBins) {
+        if (isStopped && isAtBottom) {
+            let multiplier = 0;
+            let foundBin = false;
+
+            // Check if it's inside any specific bin
             for (let bin of this.bins) {
                 if (die.mesh.position.x >= bin.x - bin.width/2 && 
                     die.mesh.position.x <= bin.x + bin.width/2) {
-                    console.log(`Result detected: bin ${bin.multiplier}`);
-                    this.displayResult(die, bin.multiplier);
-                    die.resultDeclared = true;
-
-                    // Zoom in on die
-                    this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + 3, 8);
-                    this.cameraTargetLookAt.copy(die.mesh.position);
+                    multiplier = bin.multiplier;
+                    foundBin = true;
                     break;
                 }
             }
+
+            // If not directly in a bin (e.g. on a divider or outside), find the nearest multiplier
+            if (!foundBin) {
+                let closestBin = this.bins[0];
+                let minDist = Infinity;
+                for (let bin of this.bins) {
+                    const dist = Math.abs(die.mesh.position.x - bin.x);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestBin = bin;
+                    }
+                }
+                multiplier = closestBin.multiplier;
+            }
+
+            console.log(`Result detected: multiplier ${multiplier}`);
+            this.displayResult(die, multiplier);
+            die.resultDeclared = true;
+
+            // Zoom in on die
+            this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + 3, 8);
+            this.cameraTargetLookAt.copy(die.mesh.position);
+        } else if (isStopped && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
+            // Nudge if stuck on a pin
+            die.body.wakeUp();
+            die.body.applyImpulse(
+                new CANNON.Vec3((Math.random() - 0.5) * 2, 2, (Math.random() - 0.5) * 2),
+                die.body.position
+            );
         }
 
-        if (!die.resultDeclared && die.mesh.position.y < -15) {
+        // Fail-safe for falling off the world entirely
+        if (!die.resultDeclared && die.mesh.position.y < -30) {
             this.displayResult(die, 0);
             die.resultDeclared = true;
         }
