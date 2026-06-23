@@ -319,7 +319,7 @@ class DiceRoller {
         body.quaternion.setFromEuler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
         this.world.addBody(body);
         
-        return { mesh, body, sides: this.sides, resultDeclared: false };
+        return { mesh, body, sides: this.sides, resultDeclared: false, stableTime: 0 };
     }
 
     updatePhysicsObjects() {
@@ -386,6 +386,7 @@ class DiceRoller {
             die.body.angularVelocity.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20);
             die.body.quaternion.setFromEuler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
             die.resultDeclared = false;
+            die.stableTime = 0;
         });
         
         setTimeout(() => { this.isRolling = false; }, 2000);
@@ -410,10 +411,26 @@ class DiceRoller {
         if (die.resultDeclared) return;
         
         // Die is at the bottom and stopped (or sleeping)
-        const isAtBottom = die.mesh.position.y < (this.BIN_Y + 10);
-        const isStopped = die.body.velocity.length() < 0.25 || die.body.sleepState === CANNON.Body.SLEEPING;
+        // BIN_Y is -12, collectors are 4 units high (up to -10).
+        // Set threshold to -7 to ensure it's near the bottom area.
+        const isAtBottom = die.mesh.position.y < (this.BIN_Y + 5);
+
+        // Stricter stopped check: low linear AND angular velocity
+        const velocityThreshold = 0.5;
+        const angularThreshold = 0.5;
+        const isStopped = (die.body.velocity.length() < velocityThreshold &&
+                          die.body.angularVelocity.length() < angularThreshold) ||
+                          die.body.sleepState === CANNON.Body.SLEEPING;
 
         if (isStopped && isAtBottom) {
+            // Increment stable time
+            die.stableTime++;
+
+            // Only declare result if it's been stable for at least 40 steps (~0.67 seconds at 60fps)
+            if (die.stableTime < 40) {
+                return;
+            }
+
             let multiplier = 0;
             let foundBin = false;
 
@@ -448,11 +465,16 @@ class DiceRoller {
             // Zoom in on die
             this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + 3, 8);
             this.cameraTargetLookAt.copy(die.mesh.position);
-        } else if (isStopped && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
+        } else {
+            // Reset stable time if die is moving or not at bottom
+            die.stableTime = 0;
+        }
+
+        if (isStopped && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
             // Nudge if stuck on a pin
             die.body.wakeUp();
             die.body.applyImpulse(
-                new CANNON.Vec3((Math.random() - 0.5) * 2, 2, (Math.random() - 0.5) * 2),
+                new CANNON.Vec3((Math.random() - 0.5) * 5, 8, (Math.random() - 0.5) * 2),
                 die.body.position
             );
         }
