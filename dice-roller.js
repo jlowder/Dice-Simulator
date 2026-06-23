@@ -122,15 +122,22 @@ class DiceRoller {
         pinMesh.castShadow = true;
         this.scene.add(pinMesh);
         
-        const pinShape = new CANNON.Cylinder(radius, radius, this.PIN_DEPTH, 32);
+        // Use a Box shape rotated as a diamond for better collision behavior in Cannon.js
+        // Box vs Box collisions are much more stable and accurate than Cylinder vs Box
+        // To match visual radius, sideLen * sqrt(2) should be roughly the radius
+        const sideLen = radius * 0.707;
+        const pinShape = new CANNON.Box(new CANNON.Vec3(sideLen, sideLen, this.PIN_DEPTH / 2));
         const pinBody = new CANNON.Body({
             mass: 0,
             shape: pinShape,
             material: this.pinMaterial
         });
         pinBody.position.set(x, y, 0);
+
+        // Rotate the box so its faces are angled (diamond shape from front view)
+        // and also rotate it to point towards the camera
         const quat = new CANNON.Quaternion();
-        quat.setFromEuler(Math.PI / 2, 0, 0);
+        quat.setFromEuler(Math.PI / 2, 0, Math.PI / 4);
         pinBody.quaternion.copy(quat);
         
         this.world.addBody(pinBody);
@@ -233,10 +240,10 @@ class DiceRoller {
             this.diceMaterial, this.floorMaterial, { friction: 0.5, restitution: 0.4 }
         ));
         this.world.addContactMaterial(new CANNON.ContactMaterial(
-            this.diceMaterial, this.pinMaterial, { friction: 0.1, restitution: 0.7 }
+            this.diceMaterial, this.pinMaterial, { friction: 0.0, restitution: 0.8 }
         ));
         this.world.addContactMaterial(new CANNON.ContactMaterial(
-            this.diceMaterial, this.wallMaterial, { friction: 0.3, restitution: 0.5 }
+            this.diceMaterial, this.wallMaterial, { friction: 0.1, restitution: 0.5 }
         ));
         
         this.floorBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
@@ -299,8 +306,9 @@ class DiceRoller {
             mass: 1,
             shape: new CANNON.Box(new CANNON.Vec3(size/2, size/2, size/2)),
             material: this.diceMaterial,
-            angularDamping: 0.1,
-            linearDamping: 0.05
+            angularDamping: 0.05,
+            linearDamping: 0.01,
+            allowSleep: false
         });
         
         body.position.set(0, this.SPAWN_Y, 0);
