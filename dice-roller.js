@@ -311,8 +311,8 @@ class DiceRoller {
             angularDamping: 0.15,
             linearDamping: 0.1,
             allowSleep: true,
-            sleepSpeedLimit: 0.5,
-            sleepTimeLimit: 1.0
+            sleepSpeedLimit: 0.1,
+            sleepTimeLimit: 0.5
         });
         
         body.position.set(0, this.SPAWN_Y, 0);
@@ -413,7 +413,7 @@ class DiceRoller {
         // Die is at the bottom and stopped (or sleeping)
         // BIN_Y is -12, collectors are 4 units high (up to -10).
         // Set threshold to -7 to ensure it's near the bottom area.
-        const isAtBottom = die.mesh.position.y < (this.BIN_Y + 5);
+        const isAtBottom = die.mesh.position.y < (this.BIN_Y + 7);
 
         // Stricter stopped check: low linear AND angular velocity
         const velocityThreshold = 0.5;
@@ -423,6 +423,20 @@ class DiceRoller {
                           die.body.sleepState === CANNON.Body.SLEEPING;
 
         if (isStopped && isAtBottom) {
+            const roll = this.getDieRollValue(die);
+
+            // If the die is stopped but tilted (balanced on edge/corner), give it a tiny nudge
+            if (roll.alignment < 0.95) {
+                die.body.wakeUp();
+                die.body.angularVelocity.set(
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5,
+                    (Math.random() - 0.5) * 5
+                );
+                die.stableTime = 0;
+                return;
+            }
+
             // Increment stable time
             die.stableTime++;
 
@@ -510,17 +524,17 @@ class DiceRoller {
             }
         });
 
-        return topValue;
+        return { value: topValue, alignment: maxUp };
     }
 
     displayResult(die, multiplier) {
         const resultEl = document.getElementById('result');
         if (!resultEl) return;
         
-        const dieValue = this.getDieRollValue(die);
+        const roll = this.getDieRollValue(die);
         const displayMultiplier = multiplier >= 1 ? multiplier : 'x' + multiplier;
         
-        resultEl.textContent = `Rolled ${dieValue} (Score Multiplier: ${displayMultiplier})`;
+        resultEl.textContent = `Rolled ${roll.value} (Score Multiplier: ${displayMultiplier})`;
         resultEl.classList.add('show');
         
         setTimeout(() => { resultEl.classList.remove('show'); }, 5000);
