@@ -647,7 +647,7 @@ class DiceRoller {
     const roll = this.getDieRollValue(die);
     const displayMultiplier = multiplier >= 1 ? multiplier : "x" + multiplier;
 
-    resultEl.textContent = `Rolled ${roll.value} (Score Multiplier: ${displayMultiplier})`;
+    resultEl.textContent = `Rolled ${roll.value}`;
     resultEl.classList.add("show");
 
     setTimeout(() => {
