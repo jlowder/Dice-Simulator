@@ -81,7 +81,7 @@ class DiceRoller {
         
         const plane = new THREE.Mesh(planeGeometry, planeMaterial);
         plane.rotation.x = -Math.PI / 2;
-        plane.position.y = -10;
+        plane.position.y = -10.1;
         plane.receiveShadow = true;
         this.scene.add(plane);
     }
