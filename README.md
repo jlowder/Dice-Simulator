@@ -2,7 +2,7 @@
 
 A web-based physics simulation of dice rolling with realistic 3D graphics and physics.
 
-<video src="doc/dice-example.mov" width="90%" autoplay loop muted playsinline></video>
+<video src="https://github.com/user-attachments/assets/e8934a75-0c73-444b-a039-e08eac90f2d1" width="90%" autoplay loop muted playsinline></video>
 
 ## Features
 
