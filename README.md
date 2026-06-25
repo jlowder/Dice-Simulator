@@ -2,6 +2,8 @@
 
 A web-based physics simulation of dice rolling with realistic 3D graphics and physics.
 
+<video src="doc/dice-example.mov" width="90%" autoplay loop muted playsinline></video>
+
 ## Features
 
 - 🎲 Realistic physics simulation using Cannon.js
