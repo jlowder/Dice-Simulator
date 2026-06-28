@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Physics Dice Roller</title>
+        <title>Plinko Dice Roller</title>
         <style>
             * {
                 margin: 0;
@@ -45,7 +45,7 @@
                 margin-bottom: 5px;
                 font-size: 14px;
             }
-            .control-group input,
+            .control-group input[type="number"],
             .control-group button {
                 padding: 10px 20px;
                 border: none;
@@ -53,7 +53,7 @@
                 font-size: 16px;
                 text-align: center;
             }
-            .control-group input {
+            .control-group input[type="number"] {
                 width: 80px;
                 background: #2a2a4e;
                 color: white;
@@ -102,17 +102,55 @@
             #result.show {
                 opacity: 1;
             }
+            .radio-group {
+                display: flex;
+                background: #2a2a4e;
+                padding: 5px;
+                border-radius: 8px;
+            }
+            .radio-label {
+                cursor: pointer;
+            }
+            .radio-label input {
+                display: none;
+            }
+            .radio-label span {
+                display: inline-block;
+                padding: 8px 16px;
+                border-radius: 6px;
+                color: #ccc;
+                transition: all 0.3s;
+            }
+            .radio-label input:checked + span {
+                background: #4a6fa5;
+                color: white;
+            }
         </style>
     </head>
     <body>
         <div class="header">
-            <h1></h1>
+            <h1>Plinko Dice Roller</h1>
         </div>
 
         <div class="controls">
-            <div class="control-group"></div>
             <div class="control-group">
-                <button id="rollBtn">Roll Dice</button>
+                <label>Dice Type</label>
+                <div class="radio-group" id="sidesGroup">
+                    <label class="radio-label">
+                        <input type="radio" name="sides" value="6" checked>
+                        <span>D6</span>
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="sides" value="20">
+                        <span>D20</span>
+                    </label>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="button-group">
+                    <button id="rollBtn">Roll Dice</button>
+                    <button id="zoomBtn">Zoom In</button>
+                </div>
             </div>
         </div>
 

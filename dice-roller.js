@@ -21,11 +21,12 @@ class DiceRoller {
     // Camera constants
     this.CAMERA_DEFAULT_POS = new THREE.Vector3(0, 12, 40);
     this.CAMERA_DEFAULT_LOOKAT = new THREE.Vector3(0, 12, 0);
-    this.CAMERA_LERP_FACTOR = 0.05;
+    this.CAMERA_LERP_FACTOR = 0.1;
 
     this.cameraTargetPos = this.CAMERA_DEFAULT_POS.clone();
     this.cameraTargetLookAt = this.CAMERA_DEFAULT_LOOKAT.clone();
     this.cameraCurrentLookAt = this.CAMERA_DEFAULT_LOOKAT.clone();
+    this.isZoomedIn = false;
 
     this.pinMaterial = null;
     this.binMaterial = null;
@@ -136,8 +137,6 @@ class DiceRoller {
     this.scene.add(pinMesh);
 
     // Use a Box shape rotated as a diamond for better collision behavior in Cannon.js
-    // Box vs Box collisions are much more stable and accurate than Cylinder vs Box
-    // To match visual radius, sideLen * sqrt(2) should be roughly the radius
     const pinShape = new CANNON.Box(
       new CANNON.Vec3(sideLen, sideLen, this.PIN_DEPTH / 2),
     );
@@ -148,7 +147,6 @@ class DiceRoller {
     });
     pinBody.position.set(x, y, 0);
 
-    // Rotate the box so its faces are angled (diamond shape from front view)
     const quat = new CANNON.Quaternion();
     quat.setFromEuler(0, 0, Math.PI / 4);
     pinBody.quaternion.copy(quat);
@@ -206,7 +204,6 @@ class DiceRoller {
     });
 
     const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
-    // Set wall to start at floor level (y = -10)
     wallMesh.position.set(x, height / 2 - 10, z);
     this.scene.add(wallMesh);
 
@@ -319,6 +316,14 @@ class DiceRoller {
 
   createSingleDie() {
     const size = this.DICE_SIZE;
+    if (this.sides === 6) {
+      return this.createD6(size);
+    } else if (this.sides === 20) {
+      return this.createD20(size);
+    }
+  }
+
+  createD6(size) {
     const textures = [];
     const faceValues = [1, 6, 2, 5, 3, 4];
 
@@ -327,22 +332,27 @@ class DiceRoller {
       canvas.width = 128;
       canvas.height = 128;
       const ctx = canvas.getContext("2d");
+
+      // Background
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, 128, 128);
-      ctx.strokeStyle = "#cccccc";
-      ctx.lineWidth = 5;
-      ctx.strokeRect(0, 0, 128, 128);
-      ctx.fillStyle = "#000000";
+
+      // Border with rounded look
+      ctx.strokeStyle = "#bbbbbb";
+      ctx.lineWidth = 8;
+      ctx.strokeRect(4, 4, 120, 120);
+
+      ctx.fillStyle = "#111111";
 
       const drawDot = (x, y) => {
         ctx.beginPath();
-        ctx.arc(x, y, 12, 0, Math.PI * 2);
+        ctx.arc(x, y, 14, 0, Math.PI * 2);
         ctx.fill();
       };
 
       const cx = 64,
         cy = 64,
-        offset = 35;
+        offset = 32;
       if (value === 1) drawDot(cx, cy);
       else if (value === 2) {
         drawDot(cx - offset, cy - offset);
@@ -363,15 +373,17 @@ class DiceRoller {
         drawDot(cx - offset, cy + offset);
         drawDot(cx + offset, cy + offset);
       } else if (value === 6) {
-        drawDot(cx - offset, cy - 25);
-        drawDot(cx + offset, cy - 25);
+        drawDot(cx - offset, cy - offset);
+        drawDot(cx + offset, cy - offset);
         drawDot(cx - offset, cy);
         drawDot(cx + offset, cy);
-        drawDot(cx - offset, cy + 25);
-        drawDot(cx + offset, cy + 25);
+        drawDot(cx - offset, cy + offset);
+        drawDot(cx + offset, cy + offset);
       }
 
-      textures.push(new THREE.CanvasTexture(canvas));
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      textures.push(texture);
     }
 
     const materials = textures.map(
@@ -407,6 +419,140 @@ class DiceRoller {
     return {
       mesh,
       body,
+      sides: 6,
+      resultDeclared: false,
+      stableTime: 0,
+    };
+  }
+
+  createD20(size) {
+    const radius = size * 0.9;
+    let geometry = new THREE.IcosahedronGeometry(radius);
+    if (geometry.index) {
+      geometry = geometry.toNonIndexed();
+    }
+
+    const uvs = new Float32Array(geometry.attributes.position.count * 2);
+    for (let i = 0; i < geometry.attributes.position.count; i += 3) {
+      uvs[i * 2] = 0.5;
+      uvs[i * 2 + 1] = 1.0;
+      uvs[i * 2 + 2] = 0.0;
+      uvs[i * 2 + 3] = 0.0;
+      uvs[i * 2 + 4] = 1.0;
+      uvs[i * 2 + 5] = 0.0;
+    }
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+
+    const materials = [];
+    for (let i = 1; i <= 20; i++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 128, 128);
+
+      // Face outline
+      ctx.strokeStyle = "#bbbbbb";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(64, 0);
+      ctx.lineTo(0, 128);
+      ctx.lineTo(128, 128);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Number
+      ctx.fillStyle = "#111111";
+      ctx.font = "bold 60px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const text = i.toString();
+      ctx.fillText(text, 64, 80);
+
+      // Underline for 6 and 9 to avoid confusion
+      if (i === 6 || i === 9) {
+        ctx.strokeStyle = "#111111";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(40, 112);
+        ctx.lineTo(88, 112);
+        ctx.stroke();
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      materials.push(new THREE.MeshStandardMaterial({ map: texture }));
+    }
+
+    for (let i = 0; i < 20; i++) {
+      geometry.addGroup(i * 3, 3, i);
+    }
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    const tempGeo = new THREE.IcosahedronGeometry(radius);
+    const posAttr = tempGeo.attributes.position;
+    const vertexMap = new Map();
+    const uniqueVertices = [];
+
+    const getVertexIndex = (x, y, z) => {
+      const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+      if (vertexMap.has(key)) return vertexMap.get(key);
+      const index = uniqueVertices.length;
+      uniqueVertices.push(new CANNON.Vec3(x, y, z));
+      vertexMap.set(key, index);
+      return index;
+    };
+
+    const faces = [];
+    if (tempGeo.index) {
+      const indexArray = tempGeo.index.array;
+      for (let i = 0; i < indexArray.length; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(indexArray[i]), posAttr.getY(indexArray[i]), posAttr.getZ(indexArray[i])),
+          getVertexIndex(posAttr.getX(indexArray[i + 1]), posAttr.getY(indexArray[i + 1]), posAttr.getZ(indexArray[i + 1])),
+          getVertexIndex(posAttr.getX(indexArray[i + 2]), posAttr.getY(indexArray[i + 2]), posAttr.getZ(indexArray[i + 2])),
+        ]);
+      }
+    } else {
+      for (let i = 0; i < posAttr.count; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)),
+          getVertexIndex(posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1)),
+          getVertexIndex(posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2)),
+        ]);
+      }
+    }
+
+    const body = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.ConvexPolyhedron(uniqueVertices, faces),
+      material: this.diceMaterial,
+      angularDamping: 0.2,
+      linearDamping: 0.1,
+      allowSleep: true,
+      sleepSpeedLimit: 0.1,
+      sleepTimeLimit: 0.5,
+    });
+
+    body.position.set(0, this.SPAWN_Y, 0);
+    body.quaternion.setFromEuler(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+    );
+    this.world.addBody(body);
+
+    return {
+      mesh,
+      body,
       sides: this.sides,
       resultDeclared: false,
       stableTime: 0,
@@ -421,18 +567,28 @@ class DiceRoller {
   }
 
   setupUI() {
-    const sidesInput = document.getElementById("sides");
-    if (sidesInput) {
-      this.sides = parseInt(sidesInput.value) || 6;
-      sidesInput.addEventListener("change", (e) => {
-        this.sides = parseInt(e.target.value) || 6;
-        this.createDice();
-      });
+    const sidesRadios = document.querySelectorAll('input[name="sides"]');
+    const activeRadio = Array.from(sidesRadios).find((r) => r.checked);
+    if (activeRadio) {
+      this.sides = parseInt(activeRadio.value) || 6;
     }
+    sidesRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        if (e.target.checked) {
+          this.sides = parseInt(e.target.value) || 6;
+          this.createDice();
+        }
+      });
+    });
 
     const rollBtn = document.getElementById("rollBtn");
     if (rollBtn) {
       rollBtn.addEventListener("click", () => this.rollDice());
+    }
+
+    const zoomBtn = document.getElementById("zoomBtn");
+    if (zoomBtn) {
+      zoomBtn.addEventListener("click", () => this.toggleZoom());
     }
 
     window.addEventListener("resize", () => {
@@ -446,18 +602,12 @@ class DiceRoller {
     if (this.dice.length === 0) return;
     const die = this.dice[0];
 
-    // Track the die if it's currently falling/rolling and result hasn't been declared
     if (!die.resultDeclared && die.mesh.position.y < this.SPAWN_Y) {
-      // Smoothly follow the die's Y position to keep it in view
-      // We use a slightly dampened X follow to keep the die reasonably centered
       const trackY = Math.max(this.BIN_Y + 8, die.mesh.position.y);
       this.cameraTargetPos.y = trackY;
       this.cameraTargetLookAt.y = trackY;
-
       this.cameraTargetPos.x = die.mesh.position.x * 0.5;
       this.cameraTargetLookAt.x = die.mesh.position.x * 0.5;
-
-      // Maintain overview distance until result is declared
       this.cameraTargetPos.z = 40;
     }
   }
@@ -465,10 +615,18 @@ class DiceRoller {
   rollDice() {
     if (this.isRolling) return;
     this.isRolling = true;
+    this.isZoomedIn = false;
+    const zoomBtn = document.getElementById("zoomBtn");
+    if (zoomBtn) zoomBtn.textContent = "Zoom In";
 
-    // Reset camera
     this.cameraTargetPos.copy(this.CAMERA_DEFAULT_POS);
     this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
+
+    const resultEl = document.getElementById("result");
+    if (resultEl) {
+      resultEl.classList.remove("show");
+      resultEl.textContent = "";
+    }
 
     this.dice.forEach((die) => {
       die.body.wakeUp();
@@ -488,9 +646,6 @@ class DiceRoller {
       die.stableTime = 0;
     });
 
-    setTimeout(() => {
-      this.isRolling = false;
-    }, 2000);
   }
 
   animate() {
@@ -500,12 +655,8 @@ class DiceRoller {
     this.updateCameraTracking();
     this.dice.forEach((die) => this.checkDiceResult(die));
 
-    // Smooth camera movement
     this.camera.position.lerp(this.cameraTargetPos, this.CAMERA_LERP_FACTOR);
-    this.cameraCurrentLookAt.lerp(
-      this.cameraTargetLookAt,
-      this.CAMERA_LERP_FACTOR,
-    );
+    this.cameraCurrentLookAt.lerp(this.cameraTargetLookAt, this.CAMERA_LERP_FACTOR);
     this.camera.lookAt(this.cameraCurrentLookAt);
 
     this.renderer.render(this.scene, this.camera);
@@ -514,14 +665,9 @@ class DiceRoller {
   checkDiceResult(die) {
     if (die.resultDeclared) return;
 
-    // Die is at the bottom and stopped (or sleeping)
-    // BIN_Y is -12, collectors are 4 units high (up to -10).
-    // Set threshold to -7 to ensure it's near the bottom area.
-    const isAtBottom = die.mesh.position.y < this.BIN_Y + 7;
-
-    // Stricter stopped check: low linear AND angular velocity
-    const velocityThreshold = 0.5;
-    const angularThreshold = 0.5;
+    const isAtBottom = die.mesh.position.y < this.BIN_Y + 8;
+    const velocityThreshold = 0.7;
+    const angularThreshold = 0.7;
     const isStopped =
       (die.body.velocity.length() < velocityThreshold &&
         die.body.angularVelocity.length() < angularThreshold) ||
@@ -529,43 +675,33 @@ class DiceRoller {
 
     if (isStopped && isAtBottom) {
       const roll = this.getDieRollValue(die);
+      const alignmentThreshold = 0.94;
 
-      // If the die is stopped but tilted (balanced on edge/corner), give it a tiny nudge
-      if (roll.alignment < 0.95) {
+      if (roll.alignment < alignmentThreshold) {
         die.body.wakeUp();
         die.body.angularVelocity.set(
-          (Math.random() - 0.5) * 5,
-          (Math.random() - 0.5) * 5,
-          (Math.random() - 0.5) * 5,
+          (Math.random() - 0.5) * 3,
+          (Math.random() - 0.5) * 3,
+          (Math.random() - 0.5) * 3,
         );
         die.stableTime = 0;
         return;
       }
 
-      // Increment stable time
       die.stableTime++;
+      const requiredStableTime = die.sides === 20 ? 80 : 40;
+      if (die.stableTime < requiredStableTime) return;
 
-      // Only declare result if it's been stable for at least 40 steps (~0.67 seconds at 60fps)
-      if (die.stableTime < 40) {
-        return;
-      }
-
-      let multiplier = 0;
+      let multiplier = 1;
       let foundBin = false;
-
-      // Check if it's inside any specific bin
       for (let bin of this.bins) {
-        if (
-          die.mesh.position.x >= bin.x - bin.width / 2 &&
-          die.mesh.position.x <= bin.x + bin.width / 2
-        ) {
+        if (die.mesh.position.x >= bin.x - bin.width / 2 && die.mesh.position.x <= bin.x + bin.width / 2) {
           multiplier = bin.multiplier;
           foundBin = true;
           break;
         }
       }
 
-      // If not directly in a bin (e.g. on a divider or outside), find the nearest multiplier
       if (!foundBin) {
         let closestBin = this.bins[0];
         let minDist = Infinity;
@@ -579,77 +715,125 @@ class DiceRoller {
         multiplier = closestBin.multiplier;
       }
 
-      console.log(`Result detected: multiplier ${multiplier}`);
       this.displayResult(die, multiplier);
       die.resultDeclared = true;
+      this.isRolling = false;
 
-      // Zoom in on die
-      this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + 3, 8);
+      const zoomZ = die.sides === 20 ? 2 : 3;
+      const zoomYOffset = die.sides === 20 ? 8 : 10;
+      this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
     } else {
-      // Reset stable time if die is moving or not at bottom
       die.stableTime = 0;
     }
 
-    if (isStopped && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
-      // Nudge if stuck on a pin
-      die.body.wakeUp();
-      die.body.applyImpulse(
-        new CANNON.Vec3(
-          (Math.random() - 0.5) * 5,
-          8,
-          (Math.random() - 0.5) * 2,
-        ),
-        die.body.position,
-      );
+    const isVelocityStuck = die.body.velocity.length() < 0.5;
+    if (isVelocityStuck && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
+      die.stuckTime = (die.stuckTime || 0) + 1;
+      if (die.stuckTime > 30) {
+        die.body.wakeUp();
+        const nudgeForce = 8;
+        die.body.applyImpulse(
+          new CANNON.Vec3((Math.random() - 0.5) * nudgeForce, nudgeForce, (Math.random() - 0.5) * 2),
+          die.body.position,
+        );
+        die.body.angularVelocity.set(
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10,
+        );
+        die.stuckTime = 0;
+      }
+    } else {
+      die.stuckTime = 0;
     }
 
-    // Fail-safe for falling off the world entirely
     if (!die.resultDeclared && die.mesh.position.y < -30) {
       this.displayResult(die, 0);
       die.resultDeclared = true;
+      this.isRolling = false;
     }
   }
 
   getDieRollValue(die) {
-    const faceVectors = [
-      { vector: new THREE.Vector3(1, 0, 0), value: 1 }, // +X
-      { vector: new THREE.Vector3(-1, 0, 0), value: 6 }, // -X
-      { vector: new THREE.Vector3(0, 1, 0), value: 2 }, // +Y
-      { vector: new THREE.Vector3(0, -1, 0), value: 5 }, // -Y
-      { vector: new THREE.Vector3(0, 0, 1), value: 3 }, // +Z
-      { vector: new THREE.Vector3(0, 0, -1), value: 4 }, // -Z
-    ];
-
-    let maxUp = -1;
-    let topValue = 1;
-
     const worldUp = new THREE.Vector3(0, 1, 0);
-
-    faceVectors.forEach((face) => {
-      const worldVector = face.vector
-        .clone()
-        .applyQuaternion(die.mesh.quaternion);
-      const dot = worldVector.dot(worldUp);
-      if (dot > maxUp) {
-        maxUp = dot;
-        topValue = face.value;
+    if (die.sides === 6) {
+      const faceVectors = [
+        { vector: new THREE.Vector3(1, 0, 0), value: 1 },
+        { vector: new THREE.Vector3(-1, 0, 0), value: 6 },
+        { vector: new THREE.Vector3(0, 1, 0), value: 2 },
+        { vector: new THREE.Vector3(0, -1, 0), value: 5 },
+        { vector: new THREE.Vector3(0, 0, 1), value: 3 },
+        { vector: new THREE.Vector3(0, 0, -1), value: 4 },
+      ];
+      let maxUp = -1;
+      let topValue = 1;
+      faceVectors.forEach((face) => {
+        const worldVector = face.vector.clone().applyQuaternion(die.mesh.quaternion);
+        const dot = worldVector.dot(worldUp);
+        if (dot > maxUp) {
+          maxUp = dot;
+          topValue = face.value;
+        }
+      });
+      return { value: topValue, alignment: maxUp };
+    } else {
+      let maxUp = -1;
+      let topValue = 1;
+      const geometry = die.mesh.geometry;
+      const positions = geometry.attributes.position.array;
+      for (let i = 0; i < 20; i++) {
+        const vA = new THREE.Vector3(positions[i * 9], positions[i * 9 + 1], positions[i * 9 + 2]);
+        const vB = new THREE.Vector3(positions[i * 9 + 3], positions[i * 9 + 4], positions[i * 9 + 5]);
+        const vC = new THREE.Vector3(positions[i * 9 + 6], positions[i * 9 + 7], positions[i * 9 + 8]);
+        const cb = new THREE.Vector3().subVectors(vC, vB);
+        const ab = new THREE.Vector3().subVectors(vA, vB);
+        const normal = new THREE.Vector3().crossVectors(cb, ab).normalize().applyQuaternion(die.mesh.quaternion);
+        const dot = normal.dot(worldUp);
+        if (dot > maxUp) {
+          maxUp = dot;
+          topValue = i + 1;
+        }
       }
-    });
+      return { value: topValue, alignment: maxUp };
+    }
+  }
 
-    return { value: topValue, alignment: maxUp };
+  toggleZoom() {
+    if (this.dice.length === 0) return;
+    const die = this.dice[0];
+    const zoomBtn = document.getElementById("zoomBtn");
+
+    if (!this.isZoomedIn) {
+      // Zoom closer
+      const zoomZ = die.sides === 20 ? 1 : 1.5;
+      const zoomYOffset = die.sides === 20 ? 4 : 5;
+      this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
+      this.cameraTargetLookAt.copy(die.mesh.position);
+      this.isZoomedIn = true;
+      if (zoomBtn) zoomBtn.textContent = "Zoom Out";
+    } else {
+      // Zoom back to result level or default if not settled
+      if (die.resultDeclared) {
+        const zoomZ = die.sides === 20 ? 2 : 3;
+        const zoomYOffset = die.sides === 20 ? 8 : 10;
+        this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
+        this.cameraTargetLookAt.copy(die.mesh.position);
+      } else {
+        this.cameraTargetPos.copy(this.CAMERA_DEFAULT_POS);
+        this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
+      }
+      this.isZoomedIn = false;
+      if (zoomBtn) zoomBtn.textContent = "Zoom In";
+    }
   }
 
   displayResult(die, multiplier) {
     const resultEl = document.getElementById("result");
     if (!resultEl) return;
-
     const roll = this.getDieRollValue(die);
-    const displayMultiplier = multiplier >= 1 ? multiplier : "x" + multiplier;
-
     resultEl.textContent = `Rolled ${roll.value}`;
     resultEl.classList.add("show");
-
     setTimeout(() => {
       resultEl.classList.remove("show");
     }, 5000);
