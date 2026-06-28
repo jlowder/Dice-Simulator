@@ -534,7 +534,7 @@ class DiceRoller {
       mass: 1,
       shape: new CANNON.ConvexPolyhedron(uniqueVertices, faces),
       material: this.diceMaterial,
-      angularDamping: 0.15,
+      angularDamping: 0.2,
       linearDamping: 0.1,
       allowSleep: true,
       sleepSpeedLimit: 0.1,
@@ -642,9 +642,6 @@ class DiceRoller {
       die.stableTime = 0;
     });
 
-    setTimeout(() => {
-      this.isRolling = false;
-    }, 2000);
   }
 
   animate() {
@@ -664,9 +661,9 @@ class DiceRoller {
   checkDiceResult(die) {
     if (die.resultDeclared) return;
 
-    const isAtBottom = die.mesh.position.y < this.BIN_Y + 10;
-    const velocityThreshold = die.sides === 20 ? 0.5 : 0.8;
-    const angularThreshold = die.sides === 20 ? 0.5 : 0.8;
+    const isAtBottom = die.mesh.position.y < this.BIN_Y + 8;
+    const velocityThreshold = 0.7;
+    const angularThreshold = 0.7;
     const isStopped =
       (die.body.velocity.length() < velocityThreshold &&
         die.body.angularVelocity.length() < angularThreshold) ||
@@ -674,21 +671,21 @@ class DiceRoller {
 
     if (isStopped && isAtBottom) {
       const roll = this.getDieRollValue(die);
-      const alignmentThreshold = die.sides === 20 ? 0.95 : 0.95;
+      const alignmentThreshold = 0.94;
 
       if (roll.alignment < alignmentThreshold) {
         die.body.wakeUp();
         die.body.angularVelocity.set(
-          (Math.random() - 0.5) * 5,
-          (Math.random() - 0.5) * 5,
-          (Math.random() - 0.5) * 5,
+          (Math.random() - 0.5) * 3,
+          (Math.random() - 0.5) * 3,
+          (Math.random() - 0.5) * 3,
         );
         die.stableTime = 0;
         return;
       }
 
       die.stableTime++;
-      const requiredStableTime = die.sides === 20 ? 40 : 30;
+      const requiredStableTime = die.sides === 20 ? 80 : 40;
       if (die.stableTime < requiredStableTime) return;
 
       let multiplier = 1;
@@ -716,6 +713,7 @@ class DiceRoller {
 
       this.displayResult(die, multiplier);
       die.resultDeclared = true;
+      this.isRolling = false;
 
       const zoomZ = die.sides === 20 ? 2 : 3;
       const zoomYOffset = die.sides === 20 ? 8 : 10;
@@ -725,23 +723,31 @@ class DiceRoller {
       die.stableTime = 0;
     }
 
-    if (isStopped && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
-      die.body.wakeUp();
-      const nudgeForce = die.sides === 20 ? 15 : 12;
-      die.body.applyImpulse(
-        new CANNON.Vec3((Math.random() - 0.5) * nudgeForce, nudgeForce, (Math.random() - 0.5) * 5),
-        die.body.position,
-      );
-      die.body.angularVelocity.set(
-        (Math.random() - 0.5) * 20,
-        (Math.random() - 0.5) * 20,
-        (Math.random() - 0.5) * 20,
-      );
+    const isVelocityStuck = die.body.velocity.length() < 0.5;
+    if (isVelocityStuck && !isAtBottom && die.mesh.position.y < this.SPAWN_Y - 5) {
+      die.stuckTime = (die.stuckTime || 0) + 1;
+      if (die.stuckTime > 30) {
+        die.body.wakeUp();
+        const nudgeForce = 25;
+        die.body.applyImpulse(
+          new CANNON.Vec3((Math.random() - 0.5) * nudgeForce, nudgeForce, (Math.random() - 0.5) * 5),
+          die.body.position,
+        );
+        die.body.angularVelocity.set(
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 20,
+        );
+        die.stuckTime = 0;
+      }
+    } else {
+      die.stuckTime = 0;
     }
 
     if (!die.resultDeclared && die.mesh.position.y < -30) {
       this.displayResult(die, 0);
       die.resultDeclared = true;
+      this.isRolling = false;
     }
   }
 
