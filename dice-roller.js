@@ -466,19 +466,19 @@ class DiceRoller {
 
       // Number
       ctx.fillStyle = "#111111";
-      ctx.font = "bold 55px sans-serif";
+      ctx.font = "bold 60px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
       const text = i.toString();
-      ctx.fillText(text, 64, 86);
+      ctx.fillText(text, 64, 80);
 
       // Underline for 6 and 9 to avoid confusion
       if (i === 6 || i === 9) {
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 8;
         ctx.beginPath();
-        ctx.moveTo(45, 110);
-        ctx.lineTo(83, 110);
+        ctx.moveTo(40, 112);
+        ctx.lineTo(88, 112);
         ctx.stroke();
       }
 
@@ -622,7 +622,10 @@ class DiceRoller {
     this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
 
     const resultEl = document.getElementById("result");
-    if (resultEl) resultEl.classList.remove("show");
+    if (resultEl) {
+      resultEl.classList.remove("show");
+      resultEl.textContent = "";
+    }
 
     this.dice.forEach((die) => {
       die.body.wakeUp();
