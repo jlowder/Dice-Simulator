@@ -425,7 +425,7 @@ class DiceRoller {
   createD20(size) {
     // D20 is an icosahedron
     const radius = size * 0.8; // Adjust radius to match D6 scale roughly
-    const geometry = new THREE.IcosahedronGeometry(radius);
+    const geometry = new THREE.IcosahedronGeometry(radius).toNonIndexed();
 
     // Re-map UVs for each triangle to fit the full square texture
     const uvs = new Float32Array(geometry.attributes.position.count * 2);
@@ -694,7 +694,13 @@ class DiceRoller {
       die.resultDeclared = true;
 
       // Zoom in on die
-      this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + 3, 8);
+      const zoomZ = die.sides === 20 ? 3.5 : 8;
+      const zoomYOffset = die.sides === 20 ? 1.0 : 3;
+      this.cameraTargetPos.set(
+        die.mesh.position.x,
+        die.mesh.position.y + zoomYOffset,
+        zoomZ,
+      );
       this.cameraTargetLookAt.copy(die.mesh.position);
     } else {
       // Reset stable time if die is moving or not at bottom
