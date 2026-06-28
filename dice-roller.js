@@ -26,6 +26,7 @@ class DiceRoller {
     this.cameraTargetPos = this.CAMERA_DEFAULT_POS.clone();
     this.cameraTargetLookAt = this.CAMERA_DEFAULT_LOOKAT.clone();
     this.cameraCurrentLookAt = this.CAMERA_DEFAULT_LOOKAT.clone();
+    this.isZoomedIn = false;
 
     this.pinMaterial = null;
     this.binMaterial = null;
@@ -584,6 +585,11 @@ class DiceRoller {
       rollBtn.addEventListener("click", () => this.rollDice());
     }
 
+    const zoomBtn = document.getElementById("zoomBtn");
+    if (zoomBtn) {
+      zoomBtn.addEventListener("click", () => this.toggleZoom());
+    }
+
     window.addEventListener("resize", () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
@@ -608,6 +614,9 @@ class DiceRoller {
   rollDice() {
     if (this.isRolling) return;
     this.isRolling = true;
+    this.isZoomedIn = false;
+    const zoomBtn = document.getElementById("zoomBtn");
+    if (zoomBtn) zoomBtn.textContent = "Zoom In";
 
     this.cameraTargetPos.copy(this.CAMERA_DEFAULT_POS);
     this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
@@ -708,8 +717,8 @@ class DiceRoller {
       this.displayResult(die, multiplier);
       die.resultDeclared = true;
 
-      const zoomZ = die.sides === 20 ? 8 : 10;
-      const zoomYOffset = die.sides === 20 ? 3 : 4;
+      const zoomZ = die.sides === 20 ? 7 : 8;
+      const zoomYOffset = die.sides === 20 ? 2 : 3;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
       this.cameraTargetLookAt.y -= 0.5; // Look slightly below center for better perspective
@@ -778,6 +787,35 @@ class DiceRoller {
         }
       }
       return { value: topValue, alignment: maxUp };
+    }
+  }
+
+  toggleZoom() {
+    if (this.dice.length === 0) return;
+    const die = this.dice[0];
+    const zoomBtn = document.getElementById("zoomBtn");
+
+    if (!this.isZoomedIn) {
+      // Zoom closer
+      const zoomZ = die.sides === 20 ? 4 : 5;
+      const zoomYOffset = die.sides === 20 ? 1 : 1.5;
+      this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
+      this.cameraTargetLookAt.copy(die.mesh.position);
+      this.isZoomedIn = true;
+      if (zoomBtn) zoomBtn.textContent = "Zoom Out";
+    } else {
+      // Zoom back to result level or default if not settled
+      if (die.resultDeclared) {
+        const zoomZ = die.sides === 20 ? 7 : 8;
+        const zoomYOffset = die.sides === 20 ? 2 : 3;
+        this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
+        this.cameraTargetLookAt.copy(die.mesh.position);
+      } else {
+        this.cameraTargetPos.copy(this.CAMERA_DEFAULT_POS);
+        this.cameraTargetLookAt.copy(this.CAMERA_DEFAULT_LOOKAT);
+      }
+      this.isZoomedIn = false;
+      if (zoomBtn) zoomBtn.textContent = "Zoom In";
     }
   }
 
