@@ -319,6 +319,15 @@ class DiceRoller {
 
   createSingleDie() {
     const size = this.DICE_SIZE;
+
+    if (this.sides === 6) {
+      return this.createD6(size);
+    } else if (this.sides === 20) {
+      return this.createD20(size);
+    }
+  }
+
+  createD6(size) {
     const textures = [];
     const faceValues = [1, 6, 2, 5, 3, 4];
 
@@ -407,6 +416,103 @@ class DiceRoller {
     return {
       mesh,
       body,
+      sides: 6,
+      resultDeclared: false,
+      stableTime: 0,
+    };
+  }
+
+  createD20(size) {
+    // D20 is an icosahedron
+    const radius = size * 0.8; // Adjust radius to match D6 scale roughly
+    const geometry = new THREE.IcosahedronGeometry(radius);
+
+    // Re-map UVs for each triangle to fit the full square texture
+    const uvs = new Float32Array(geometry.attributes.position.count * 2);
+    for (let i = 0; i < geometry.attributes.position.count; i += 3) {
+      uvs[i * 2] = 0.5;
+      uvs[i * 2 + 1] = 1.0;
+      uvs[i * 2 + 2] = 0.0;
+      uvs[i * 2 + 3] = 0.0;
+      uvs[i * 2 + 4] = 1.0;
+      uvs[i * 2 + 5] = 0.0;
+    }
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+
+    const materials = [];
+    for (let i = 1; i <= 20; i++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 128, 128);
+      ctx.strokeStyle = "#cccccc";
+      ctx.lineWidth = 5;
+      ctx.strokeRect(0, 0, 128, 128);
+
+      ctx.fillStyle = "#000000";
+      ctx.font = "bold 50px Arial";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      // The triangle UV mapping used (0.5, 1), (0, 0), (1, 0)
+      // Center of equilateral triangle is at (0.5, 1/3) in UV space
+      // In Canvas space (Y down), this is (64, 128 * 2/3) = (64, 85)
+      ctx.fillText(i.toString(), 64, 85);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      materials.push(new THREE.MeshStandardMaterial({ map: texture }));
+    }
+
+    // Apply materials to faces
+    for (let i = 0; i < 20; i++) {
+      geometry.addGroup(i * 3, 3, i);
+    }
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    // Create Cannon.js shape
+    const vertices = [];
+    const faces = [];
+
+    // Extract vertices and faces from Three.js geometry for Cannon.js ConvexPolyhedron
+    const positions = geometry.attributes.position.array;
+    for (let i = 0; i < positions.length; i += 3) {
+      vertices.push(
+        new CANNON.Vec3(positions[i], positions[i + 1], positions[i + 2]),
+      );
+    }
+
+    // Since it's non-indexed, every 3 vertices is a face
+    for (let i = 0; i < vertices.length; i += 3) {
+      faces.push([i, i + 1, i + 2]);
+    }
+
+    const body = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.ConvexPolyhedron(vertices, faces),
+      material: this.diceMaterial,
+      angularDamping: 0.15,
+      linearDamping: 0.1,
+      allowSleep: true,
+      sleepSpeedLimit: 0.1,
+      sleepTimeLimit: 0.5,
+    });
+
+    body.position.set(0, this.SPAWN_Y, 0);
+    body.quaternion.setFromEuler(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+    );
+    this.world.addBody(body);
+
+    return {
+      mesh,
+      body,
       sides: this.sides,
       resultDeclared: false,
       stableTime: 0,
@@ -421,14 +527,18 @@ class DiceRoller {
   }
 
   setupUI() {
-    const sidesInput = document.getElementById("sides");
-    if (sidesInput) {
-      this.sides = parseInt(sidesInput.value) || 6;
-      sidesInput.addEventListener("change", (e) => {
-        this.sides = parseInt(e.target.value) || 6;
-        this.createDice();
+    const sidesRadios = document.querySelectorAll('input[name="sides"]');
+    sidesRadios.forEach((radio) => {
+      if (radio.checked) {
+        this.sides = parseInt(radio.value) || 6;
+      }
+      radio.addEventListener("change", (e) => {
+        if (e.target.checked) {
+          this.sides = parseInt(e.target.value) || 6;
+          this.createDice();
+        }
       });
-    }
+    });
 
     const rollBtn = document.getElementById("rollBtn");
     if (rollBtn) {
@@ -612,32 +722,76 @@ class DiceRoller {
   }
 
   getDieRollValue(die) {
-    const faceVectors = [
-      { vector: new THREE.Vector3(1, 0, 0), value: 1 }, // +X
-      { vector: new THREE.Vector3(-1, 0, 0), value: 6 }, // -X
-      { vector: new THREE.Vector3(0, 1, 0), value: 2 }, // +Y
-      { vector: new THREE.Vector3(0, -1, 0), value: 5 }, // -Y
-      { vector: new THREE.Vector3(0, 0, 1), value: 3 }, // +Z
-      { vector: new THREE.Vector3(0, 0, -1), value: 4 }, // -Z
-    ];
+    if (die.sides === 6) {
+      const faceVectors = [
+        { vector: new THREE.Vector3(1, 0, 0), value: 1 }, // +X
+        { vector: new THREE.Vector3(-1, 0, 0), value: 6 }, // -X
+        { vector: new THREE.Vector3(0, 1, 0), value: 2 }, // +Y
+        { vector: new THREE.Vector3(0, -1, 0), value: 5 }, // -Y
+        { vector: new THREE.Vector3(0, 0, 1), value: 3 }, // +Z
+        { vector: new THREE.Vector3(0, 0, -1), value: 4 }, // -Z
+      ];
 
-    let maxUp = -1;
-    let topValue = 1;
+      let maxUp = -1;
+      let topValue = 1;
 
-    const worldUp = new THREE.Vector3(0, 1, 0);
+      const worldUp = new THREE.Vector3(0, 1, 0);
 
-    faceVectors.forEach((face) => {
-      const worldVector = face.vector
-        .clone()
-        .applyQuaternion(die.mesh.quaternion);
-      const dot = worldVector.dot(worldUp);
-      if (dot > maxUp) {
-        maxUp = dot;
-        topValue = face.value;
+      faceVectors.forEach((face) => {
+        const worldVector = face.vector
+          .clone()
+          .applyQuaternion(die.mesh.quaternion);
+        const dot = worldVector.dot(worldUp);
+        if (dot > maxUp) {
+          maxUp = dot;
+          topValue = face.value;
+        }
+      });
+
+      return { value: topValue, alignment: maxUp };
+    } else {
+      // D20 logic
+      const worldUp = new THREE.Vector3(0, 1, 0);
+      let maxUp = -1;
+      let topValue = 1;
+
+      const geometry = die.mesh.geometry;
+      const positions = geometry.attributes.position.array;
+
+      for (let i = 0; i < 20; i++) {
+        // Calculate face normal for each triangular face
+        const vA = new THREE.Vector3(
+          positions[i * 9],
+          positions[i * 9 + 1],
+          positions[i * 9 + 2],
+        );
+        const vB = new THREE.Vector3(
+          positions[i * 9 + 3],
+          positions[i * 9 + 4],
+          positions[i * 9 + 5],
+        );
+        const vC = new THREE.Vector3(
+          positions[i * 9 + 6],
+          positions[i * 9 + 7],
+          positions[i * 9 + 8],
+        );
+
+        const cb = new THREE.Vector3().subVectors(vC, vB);
+        const ab = new THREE.Vector3().subVectors(vA, vB);
+        const normal = new THREE.Vector3()
+          .crossVectors(cb, ab)
+          .normalize()
+          .applyQuaternion(die.mesh.quaternion);
+
+        const dot = normal.dot(worldUp);
+        if (dot > maxUp) {
+          maxUp = dot;
+          topValue = i + 1;
+        }
       }
-    });
 
-    return { value: topValue, alignment: maxUp };
+      return { value: topValue, alignment: maxUp };
+    }
   }
 
   displayResult(die, multiplier) {
