@@ -475,6 +475,7 @@ class DiceRoller {
 
       // Underline for 6 and 9 to avoid confusion
       if (i === 6 || i === 9) {
+        ctx.strokeStyle = "#111111";
         ctx.lineWidth = 8;
         ctx.beginPath();
         ctx.moveTo(40, 112);
