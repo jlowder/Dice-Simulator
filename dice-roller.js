@@ -717,11 +717,10 @@ class DiceRoller {
       this.displayResult(die, multiplier);
       die.resultDeclared = true;
 
-      const zoomZ = die.sides === 20 ? 7 : 8;
-      const zoomYOffset = die.sides === 20 ? 2 : 3;
+      const zoomZ = die.sides === 20 ? 2 : 3;
+      const zoomYOffset = die.sides === 20 ? 8 : 10;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
-      this.cameraTargetLookAt.y -= 0.5; // Look slightly below center for better perspective
     } else {
       die.stableTime = 0;
     }
@@ -797,8 +796,8 @@ class DiceRoller {
 
     if (!this.isZoomedIn) {
       // Zoom closer
-      const zoomZ = die.sides === 20 ? 4 : 5;
-      const zoomYOffset = die.sides === 20 ? 1 : 1.5;
+      const zoomZ = die.sides === 20 ? 1 : 1.5;
+      const zoomYOffset = die.sides === 20 ? 4 : 5;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
       this.isZoomedIn = true;
@@ -806,8 +805,8 @@ class DiceRoller {
     } else {
       // Zoom back to result level or default if not settled
       if (die.resultDeclared) {
-        const zoomZ = die.sides === 20 ? 7 : 8;
-        const zoomYOffset = die.sides === 20 ? 2 : 3;
+        const zoomZ = die.sides === 20 ? 2 : 3;
+        const zoomYOffset = die.sides === 20 ? 8 : 10;
         this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
         this.cameraTargetLookAt.copy(die.mesh.position);
       } else {
