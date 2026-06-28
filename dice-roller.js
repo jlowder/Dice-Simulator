@@ -732,15 +732,15 @@ class DiceRoller {
       die.stuckTime = (die.stuckTime || 0) + 1;
       if (die.stuckTime > 30) {
         die.body.wakeUp();
-        const nudgeForce = 25;
+        const nudgeForce = 8;
         die.body.applyImpulse(
-          new CANNON.Vec3((Math.random() - 0.5) * nudgeForce, nudgeForce, (Math.random() - 0.5) * 5),
+          new CANNON.Vec3((Math.random() - 0.5) * nudgeForce, nudgeForce, (Math.random() - 0.5) * 2),
           die.body.position,
         );
         die.body.angularVelocity.set(
-          (Math.random() - 0.5) * 20,
-          (Math.random() - 0.5) * 20,
-          (Math.random() - 0.5) * 20,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10,
+          (Math.random() - 0.5) * 10,
         );
         die.stuckTime = 0;
       }
