@@ -656,8 +656,8 @@ class DiceRoller {
     if (die.resultDeclared) return;
 
     const isAtBottom = die.mesh.position.y < this.BIN_Y + 10;
-    const velocityThreshold = 0.8;
-    const angularThreshold = 0.8;
+    const velocityThreshold = die.sides === 20 ? 0.5 : 0.8;
+    const angularThreshold = die.sides === 20 ? 0.5 : 0.8;
     const isStopped =
       (die.body.velocity.length() < velocityThreshold &&
         die.body.angularVelocity.length() < angularThreshold) ||
@@ -665,7 +665,7 @@ class DiceRoller {
 
     if (isStopped && isAtBottom) {
       const roll = this.getDieRollValue(die);
-      const alignmentThreshold = die.sides === 20 ? 0.9 : 0.95;
+      const alignmentThreshold = die.sides === 20 ? 0.95 : 0.95;
 
       if (roll.alignment < alignmentThreshold) {
         die.body.wakeUp();
@@ -679,7 +679,8 @@ class DiceRoller {
       }
 
       die.stableTime++;
-      if (die.stableTime < 30) return;
+      const requiredStableTime = die.sides === 20 ? 40 : 30;
+      if (die.stableTime < requiredStableTime) return;
 
       let multiplier = 1;
       let foundBin = false;
