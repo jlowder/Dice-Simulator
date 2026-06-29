@@ -486,9 +486,63 @@ class DiceRoller {
     // Dodecahedron has 12 faces, each made of 3 triangles.
     // DodecahedronGeometry(radius, 0) in Three.js has 108 vertices (36 triangles).
     // Each pentagonal face is represented by 3 triangles (9 vertices).
+    const pos = geometry.attributes.position.array;
+    const uvs = new Float32Array(geometry.attributes.position.count * 2);
+
     for (let i = 0; i < 12; i++) {
+      const faceStart = i * 9;
+      const faceVertices = [];
+      for (let j = 0; j < 9; j++) {
+        const idx = (faceStart + j) * 3;
+        faceVertices.push(new THREE.Vector3(pos[idx], pos[idx + 1], pos[idx + 2]));
+      }
+
+      // Calculate face center and normal
+      const center = new THREE.Vector3();
+      faceVertices.forEach((v) => center.add(v));
+      center.divideScalar(9);
+
+      const v0 = faceVertices[0];
+      const v1 = faceVertices[1];
+      const v2 = faceVertices[2];
+      const normal = new THREE.Vector3()
+        .subVectors(v1, v0)
+        .cross(new THREE.Vector3().subVectors(v2, v0))
+        .normalize();
+
+      // Create local coordinate system
+      let tangent = new THREE.Vector3().subVectors(v0, center).normalize();
+      let bitangent = new THREE.Vector3().crossVectors(normal, tangent).normalize();
+
+      // Project vertices to 2D
+      const projected = faceVertices.map((v) => {
+        const local = new THREE.Vector3().subVectors(v, center);
+        return {
+          u: local.dot(tangent),
+          v: local.dot(bitangent),
+        };
+      });
+
+      // Find bounding box in 2D to normalize
+      let maxDist = 0;
+      projected.forEach((p) => {
+        const dist = Math.sqrt(p.u * p.u + p.v * p.v);
+        if (dist > maxDist) maxDist = dist;
+      });
+
+      // Assign UVs centered in [0.5, 0.5]
+      // We scale so the pentagon fits nicely within the 128x128 canvas
+      // The pentagon in the texture has a radius of ~60 pixels (out of 128)
+      const uvScale = 0.45 / maxDist;
+      for (let j = 0; j < 9; j++) {
+        const uvIdx = (faceStart + j) * 2;
+        uvs[uvIdx] = 0.5 + projected[j].u * uvScale;
+        uvs[uvIdx + 1] = 0.5 + projected[j].v * uvScale;
+      }
+
       geometry.addGroup(i * 9, 9, i);
     }
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 
     const mesh = new THREE.Mesh(geometry, materials);
     mesh.castShadow = true;
