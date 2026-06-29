@@ -318,6 +318,8 @@ class DiceRoller {
     const size = this.DICE_SIZE;
     if (this.sides === 6) {
       return this.createD6(size);
+    } else if (this.sides === 12) {
+      return this.createD12(size);
     } else if (this.sides === 20) {
       return this.createD20(size);
     }
@@ -420,6 +422,136 @@ class DiceRoller {
       mesh,
       body,
       sides: 6,
+      resultDeclared: false,
+      stableTime: 0,
+    };
+  }
+
+  createD12(size) {
+    const radius = size * 0.85;
+    let geometry = new THREE.DodecahedronGeometry(radius);
+    if (geometry.index) {
+      geometry = geometry.toNonIndexed();
+    }
+
+    const materials = [];
+    for (let i = 1; i <= 12; i++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 128, 128);
+
+      // Face outline (Pentagon)
+      ctx.strokeStyle = "#bbbbbb";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      for (let j = 0; j < 5; j++) {
+        const angle = (j / 5) * Math.PI * 2 - Math.PI / 2;
+        const x = 64 + Math.cos(angle) * 60;
+        const y = 64 + Math.sin(angle) * 60;
+        if (j === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+
+      // Number
+      ctx.fillStyle = "#111111";
+      ctx.font = "bold 50px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const text = i.toString();
+      ctx.fillText(text, 64, 64);
+
+      // Underline for 6 and 9 to avoid confusion
+      if (i === 6 || i === 9) {
+        ctx.strokeStyle = "#111111";
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(45, 95);
+        ctx.lineTo(83, 95);
+        ctx.stroke();
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      materials.push(new THREE.MeshStandardMaterial({ map: texture }));
+    }
+
+    // Dodecahedron has 12 faces, each made of 3 triangles.
+    // DodecahedronGeometry(radius, 0) in Three.js has 108 vertices (36 triangles).
+    // Each pentagonal face is represented by 3 triangles (9 vertices).
+    for (let i = 0; i < 12; i++) {
+      geometry.addGroup(i * 9, 9, i);
+    }
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    const tempGeo = new THREE.DodecahedronGeometry(radius);
+    const posAttr = tempGeo.attributes.position;
+    const vertexMap = new Map();
+    const uniqueVertices = [];
+
+    const getVertexIndex = (x, y, z) => {
+      const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+      if (vertexMap.has(key)) return vertexMap.get(key);
+      const index = uniqueVertices.length;
+      uniqueVertices.push(new CANNON.Vec3(x, y, z));
+      vertexMap.set(key, index);
+      return index;
+    };
+
+    const faces = [];
+    if (tempGeo.index) {
+      const indexArray = tempGeo.index.array;
+      for (let i = 0; i < indexArray.length; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(indexArray[i]), posAttr.getY(indexArray[i]), posAttr.getZ(indexArray[i])),
+          getVertexIndex(posAttr.getX(indexArray[i + 1]), posAttr.getY(indexArray[i + 1]), posAttr.getZ(indexArray[i + 1])),
+          getVertexIndex(posAttr.getX(indexArray[i + 2]), posAttr.getY(indexArray[i + 2]), posAttr.getZ(indexArray[i + 2])),
+        ]);
+      }
+    } else {
+      for (let i = 0; i < posAttr.count; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)),
+          getVertexIndex(posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1)),
+          getVertexIndex(posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2)),
+        ]);
+      }
+    }
+
+    const body = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.ConvexPolyhedron(uniqueVertices, faces),
+      material: this.diceMaterial,
+      angularDamping: 0.18,
+      linearDamping: 0.1,
+      allowSleep: true,
+      sleepSpeedLimit: 0.1,
+      sleepTimeLimit: 0.5,
+    });
+
+    body.position.set(0, this.SPAWN_Y, 0);
+    body.quaternion.setFromEuler(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+    );
+    this.world.addBody(body);
+
+    return {
+      mesh,
+      body,
+      sides: 12,
       resultDeclared: false,
       stableTime: 0,
     };
@@ -689,7 +821,7 @@ class DiceRoller {
       }
 
       die.stableTime++;
-      const requiredStableTime = die.sides === 20 ? 80 : 40;
+      const requiredStableTime = die.sides === 20 ? 80 : die.sides === 12 ? 60 : 40;
       if (die.stableTime < requiredStableTime) return;
 
       let multiplier = 1;
@@ -719,8 +851,8 @@ class DiceRoller {
       die.resultDeclared = true;
       this.isRolling = false;
 
-      const zoomZ = die.sides === 20 ? 2 : 3;
-      const zoomYOffset = die.sides === 20 ? 8 : 10;
+      const zoomZ = die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : 3;
+      const zoomYOffset = die.sides === 20 ? 8 : die.sides === 12 ? 9 : 10;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
     } else {
@@ -782,10 +914,13 @@ class DiceRoller {
       let topValue = 1;
       const geometry = die.mesh.geometry;
       const positions = geometry.attributes.position.array;
-      for (let i = 0; i < 20; i++) {
-        const vA = new THREE.Vector3(positions[i * 9], positions[i * 9 + 1], positions[i * 9 + 2]);
-        const vB = new THREE.Vector3(positions[i * 9 + 3], positions[i * 9 + 4], positions[i * 9 + 5]);
-        const vC = new THREE.Vector3(positions[i * 9 + 6], positions[i * 9 + 7], positions[i * 9 + 8]);
+      const numFaces = die.sides;
+      const verticesPerFace = die.sides === 20 ? 3 : 9; // 1 triangle for D20, 3 triangles for D12
+      for (let i = 0; i < numFaces; i++) {
+        const idx = i * verticesPerFace * 3;
+        const vA = new THREE.Vector3(positions[idx], positions[idx + 1], positions[idx + 2]);
+        const vB = new THREE.Vector3(positions[idx + 3], positions[idx + 4], positions[idx + 5]);
+        const vC = new THREE.Vector3(positions[idx + 6], positions[idx + 7], positions[idx + 8]);
         const cb = new THREE.Vector3().subVectors(vC, vB);
         const ab = new THREE.Vector3().subVectors(vA, vB);
         const normal = new THREE.Vector3().crossVectors(cb, ab).normalize().applyQuaternion(die.mesh.quaternion);
@@ -806,8 +941,8 @@ class DiceRoller {
 
     if (!this.isZoomedIn) {
       // Zoom closer
-      const zoomZ = die.sides === 20 ? 1 : 1.5;
-      const zoomYOffset = die.sides === 20 ? 4 : 5;
+      const zoomZ = die.sides === 20 ? 1 : die.sides === 12 ? 1.25 : 1.5;
+      const zoomYOffset = die.sides === 20 ? 4 : die.sides === 12 ? 4.5 : 5;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
       this.isZoomedIn = true;
@@ -815,8 +950,8 @@ class DiceRoller {
     } else {
       // Zoom back to result level or default if not settled
       if (die.resultDeclared) {
-        const zoomZ = die.sides === 20 ? 2 : 3;
-        const zoomYOffset = die.sides === 20 ? 8 : 10;
+        const zoomZ = die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : 3;
+        const zoomYOffset = die.sides === 20 ? 8 : die.sides === 12 ? 9 : 10;
         this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
         this.cameraTargetLookAt.copy(die.mesh.position);
       } else {
