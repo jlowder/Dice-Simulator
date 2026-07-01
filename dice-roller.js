@@ -433,6 +433,7 @@ class DiceRoller {
     const radius = size * 0.85;
     const H = size * 0.9;
     const h = H * 0.10557; // Ratio for flat kite faces
+    const vMid = (2 * h) / (H + h); // Proportional vertical position of kite corners
 
     const Pu = new THREE.Vector3(0, 0, H);
     const Pl = new THREE.Vector3(0, 0, -H);
@@ -457,11 +458,11 @@ class DiceRoller {
 
       // Left half: Pu, u1, l
       positions.push(Pu.x, Pu.y, Pu.z, u1.x, u1.y, u1.z, l.x, l.y, l.z);
-      uvs.push(0.5, 1.0, 0.0, 0.5, 0.5, 0.0);
+      uvs.push(0.5, 1.0, 0.0, vMid, 0.5, 0.0);
 
       // Right half: Pu, l, u2
       positions.push(Pu.x, Pu.y, Pu.z, l.x, l.y, l.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, 0.5);
+      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, vMid);
     }
 
     // Bottom faces (CCW winding, split along vertical spine Pl-u)
@@ -472,11 +473,11 @@ class DiceRoller {
 
       // Right half: Pl, u2, l1
       positions.push(Pl.x, Pl.y, Pl.z, u2.x, u2.y, u2.z, l1.x, l1.y, l1.z);
-      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, 0.5);
+      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, vMid);
 
       // Left half: Pl, l2, u2
       positions.push(Pl.x, Pl.y, Pl.z, l2.x, l2.y, l2.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 1.0, 0.0, 0.5, 0.5, 0.0);
+      uvs.push(0.5, 1.0, 0.0, vMid, 0.5, 0.0);
     }
 
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -494,35 +495,42 @@ class DiceRoller {
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, 128, 128);
 
+      const yMid = 128 * (1 - vMid);
       // Face outline (Kite)
       ctx.strokeStyle = "#bbbbbb";
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.moveTo(64, 0); // Pu
-      ctx.lineTo(0, 64); // U1
+      ctx.lineTo(0, yMid); // U1
       ctx.lineTo(64, 128); // L
-      ctx.lineTo(128, 64); // U2
+      ctx.lineTo(128, yMid); // U2
       ctx.closePath();
       ctx.stroke();
 
       // Number
       ctx.fillStyle = "#111111";
-      ctx.font = "bold 60px sans-serif";
+      ctx.font = "bold 50px sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      const text = i.toString();
-      ctx.fillText(text, 64, 64);
+      const text = (i % 10).toString();
+      const textY = yMid * 0.5; // Center of the upper kite portion
+
+      ctx.save();
+      ctx.translate(64, textY);
+      ctx.scale(0.75, 1.0); // Compress horizontally to fit the narrow face better
+      ctx.fillText(text, 0, 0);
 
       // Underline for 6 and 9
-      if (i === 6 || i === 9) {
+      if (text === "6" || text === "9") {
         ctx.strokeStyle = "#111111";
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 5;
         ctx.beginPath();
-        ctx.moveTo(45, 95);
-        ctx.lineTo(83, 95);
+        ctx.moveTo(-25, 28);
+        ctx.lineTo(25, 28);
         ctx.stroke();
       }
+      ctx.restore();
 
       const texture = new THREE.CanvasTexture(canvas);
       texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
