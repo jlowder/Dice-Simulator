@@ -513,7 +513,7 @@ class DiceRoller {
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      const text = (i % 10).toString();
+      const text = i.toString();
       const textY = yMid * 0.5; // Center of the upper kite portion
 
       ctx.save();
