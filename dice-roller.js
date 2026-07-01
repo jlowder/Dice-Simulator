@@ -431,8 +431,8 @@ class DiceRoller {
 
   createD10(size) {
     const radius = size * 0.85;
-    const h = size * 0.25;
     const H = size * 0.9;
+    const h = H * 0.10557; // Ratio for flat kite faces
 
     const Pu = new THREE.Vector3(0, 0, H);
     const Pl = new THREE.Vector3(0, 0, -H);
@@ -449,34 +449,34 @@ class DiceRoller {
     const positions = [];
     const uvs = [];
 
-    // Top faces
+    // Top faces (CCW winding, split along vertical spine Pu-l)
     for (let i = 0; i < 5; i++) {
       const u1 = U[i];
       const l = L[i];
       const u2 = U[(i + 1) % 5];
 
-      // Triangle 1: Pu, u1, l
+      // Left half: Pu, u1, l
       positions.push(Pu.x, Pu.y, Pu.z, u1.x, u1.y, u1.z, l.x, l.y, l.z);
       uvs.push(0.5, 1.0, 0.0, 0.5, 0.5, 0.0);
 
-      // Triangle 2: Pu, l, u2
+      // Right half: Pu, l, u2
       positions.push(Pu.x, Pu.y, Pu.z, l.x, l.y, l.z, u2.x, u2.y, u2.z);
       uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, 0.5);
     }
 
-    // Bottom faces
+    // Bottom faces (CCW winding, split along vertical spine Pl-u)
     for (let i = 0; i < 5; i++) {
       const l1 = L[i];
       const u2 = U[(i + 1) % 5];
       const l2 = L[(i + 1) % 5];
 
-      // Triangle 1: Pl, l2, u2
-      positions.push(Pl.x, Pl.y, Pl.z, l2.x, l2.y, l2.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 1.0, 0.0, 0.5, 0.5, 0.0);
-
-      // Triangle 2: Pl, u2, l1
+      // Right half: Pl, u2, l1
       positions.push(Pl.x, Pl.y, Pl.z, u2.x, u2.y, u2.z, l1.x, l1.y, l1.z);
       uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, 0.5);
+
+      // Left half: Pl, l2, u2
+      positions.push(Pl.x, Pl.y, Pl.z, l2.x, l2.y, l2.z, u2.x, u2.y, u2.z);
+      uvs.push(0.5, 1.0, 0.0, 0.5, 0.5, 0.0);
     }
 
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
