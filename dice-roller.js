@@ -318,6 +318,8 @@ class DiceRoller {
     const size = this.DICE_SIZE;
     if (this.sides === 6) {
       return this.createD6(size);
+    } else if (this.sides === 8) {
+      return this.createD8(size);
     } else if (this.sides === 10) {
       return this.createD10(size);
     } else if (this.sides === 12) {
@@ -325,6 +327,140 @@ class DiceRoller {
     } else if (this.sides === 20) {
       return this.createD20(size);
     }
+  }
+
+  createD8(size) {
+    const radius = size * 0.9;
+    let geometry = new THREE.OctahedronGeometry(radius);
+    if (geometry.index) {
+      geometry = geometry.toNonIndexed();
+    }
+
+    const uvs = new Float32Array(geometry.attributes.position.count * 2);
+    for (let i = 0; i < geometry.attributes.position.count; i += 3) {
+      uvs[i * 2] = 0.5;
+      uvs[i * 2 + 1] = 1.0;
+      uvs[i * 2 + 2] = 0.0;
+      uvs[i * 2 + 3] = 0.0;
+      uvs[i * 2 + 4] = 1.0;
+      uvs[i * 2 + 5] = 0.0;
+    }
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+
+    const materials = [];
+    for (let i = 1; i <= 8; i++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 128, 128);
+
+      // Face outline
+      ctx.strokeStyle = "#bbbbbb";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(64, 0);
+      ctx.lineTo(0, 128);
+      ctx.lineTo(128, 128);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Number
+      ctx.fillStyle = "#111111";
+      ctx.font = "bold 60px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const text = i.toString();
+      ctx.fillText(text, 64, 80);
+
+      // Underline for 6 to avoid confusion
+      if (i === 6) {
+        ctx.strokeStyle = "#111111";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(40, 112);
+        ctx.lineTo(88, 112);
+        ctx.stroke();
+      }
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      materials.push(new THREE.MeshStandardMaterial({ map: texture }));
+    }
+
+    for (let i = 0; i < 8; i++) {
+      geometry.addGroup(i * 3, 3, i);
+    }
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    const tempGeo = new THREE.OctahedronGeometry(radius);
+    const posAttr = tempGeo.attributes.position;
+    const vertexMap = new Map();
+    const uniqueVertices = [];
+
+    const getVertexIndex = (x, y, z) => {
+      const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+      if (vertexMap.has(key)) return vertexMap.get(key);
+      const index = uniqueVertices.length;
+      uniqueVertices.push(new CANNON.Vec3(x, y, z));
+      vertexMap.set(key, index);
+      return index;
+    };
+
+    const faces = [];
+    if (tempGeo.index) {
+      const indexArray = tempGeo.index.array;
+      for (let i = 0; i < indexArray.length; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(indexArray[i]), posAttr.getY(indexArray[i]), posAttr.getZ(indexArray[i])),
+          getVertexIndex(posAttr.getX(indexArray[i + 1]), posAttr.getY(indexArray[i + 1]), posAttr.getZ(indexArray[i + 1])),
+          getVertexIndex(posAttr.getX(indexArray[i + 2]), posAttr.getY(indexArray[i + 2]), posAttr.getZ(indexArray[i + 2])),
+        ]);
+      }
+    } else {
+      for (let i = 0; i < posAttr.count; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)),
+          getVertexIndex(posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1)),
+          getVertexIndex(posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2)),
+        ]);
+      }
+    }
+
+    const body = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.ConvexPolyhedron(uniqueVertices, faces),
+      material: this.diceMaterial,
+      angularDamping: 0.15,
+      linearDamping: 0.1,
+      allowSleep: true,
+      sleepSpeedLimit: 0.1,
+      sleepTimeLimit: 0.5,
+    });
+
+    body.position.set(0, this.SPAWN_Y, 0);
+    body.quaternion.setFromEuler(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+    );
+    this.world.addBody(body);
+
+    return {
+      mesh,
+      body,
+      sides: 8,
+      resultDeclared: false,
+      stableTime: 0,
+    };
   }
 
   createD6(size) {
@@ -458,11 +594,11 @@ class DiceRoller {
 
       // Left half: Pu, u1, l
       positions.push(Pu.x, Pu.y, Pu.z, u1.x, u1.y, u1.z, l.x, l.y, l.z);
-      uvs.push(0.5, 1.0, 0.0, vMid, 0.5, 0.0);
+      uvs.push(0.5, 1.0, 1.0, vMid, 0.5, 0.0);
 
       // Right half: Pu, l, u2
       positions.push(Pu.x, Pu.y, Pu.z, l.x, l.y, l.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, vMid);
+      uvs.push(0.5, 1.0, 0.5, 0.0, 0.0, vMid);
     }
 
     // Bottom faces (CCW winding, split along vertical spine Pl-u)
@@ -473,11 +609,11 @@ class DiceRoller {
 
       // Right half: Pl, u2, l1
       positions.push(Pl.x, Pl.y, Pl.z, u2.x, u2.y, u2.z, l1.x, l1.y, l1.z);
-      uvs.push(0.5, 0.0, 0.5, 1.0, 1.0, 1.0 - vMid);
+      uvs.push(0.5, 0.0, 0.5, 1.0, 0.0, 1.0 - vMid);
 
       // Left half: Pl, l2, u2
       positions.push(Pl.x, Pl.y, Pl.z, l2.x, l2.y, l2.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 0.0, 0.0, 1.0 - vMid, 0.5, 1.0);
+      uvs.push(0.5, 0.0, 1.0, 1.0 - vMid, 0.5, 1.0);
     }
 
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -1044,7 +1180,7 @@ class DiceRoller {
 
       die.stableTime++;
       const requiredStableTime =
-        die.sides === 20 ? 80 : die.sides === 12 ? 60 : die.sides === 10 ? 50 : 40;
+        die.sides === 20 ? 80 : die.sides === 12 ? 60 : die.sides === 10 ? 50 : die.sides === 8 ? 45 : 40;
       if (die.stableTime < requiredStableTime) return;
 
       let multiplier = 1;
@@ -1075,9 +1211,9 @@ class DiceRoller {
       this.isRolling = false;
 
       const zoomZ =
-        die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : 3;
+        die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : die.sides === 8 ? 2.85 : 3;
       const zoomYOffset =
-        die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : 10;
+        die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : die.sides === 8 ? 9.75 : 10;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
     } else {
@@ -1171,9 +1307,9 @@ class DiceRoller {
     if (!this.isZoomedIn) {
       // Zoom closer
       const zoomZ =
-        die.sides === 20 ? 1 : die.sides === 12 ? 1.25 : die.sides === 10 ? 1.35 : 1.5;
+        die.sides === 20 ? 1 : die.sides === 12 ? 1.25 : die.sides === 10 ? 1.35 : die.sides === 8 ? 1.45 : 1.5;
       const zoomYOffset =
-        die.sides === 20 ? 4 : die.sides === 12 ? 4.5 : die.sides === 10 ? 4.75 : 5;
+        die.sides === 20 ? 4 : die.sides === 12 ? 4.5 : die.sides === 10 ? 4.75 : die.sides === 8 ? 4.85 : 5;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
       this.isZoomedIn = true;
@@ -1182,9 +1318,9 @@ class DiceRoller {
       // Zoom back to result level or default if not settled
       if (die.resultDeclared) {
         const zoomZ =
-          die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : 3;
+          die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : die.sides === 8 ? 2.85 : 3;
         const zoomYOffset =
-          die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : 10;
+          die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : die.sides === 8 ? 9.75 : 10;
         this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
         this.cameraTargetLookAt.copy(die.mesh.position);
       } else {
