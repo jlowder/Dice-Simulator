@@ -1029,7 +1029,7 @@ class DiceRoller {
 
     if (isStopped && isAtBottom) {
       const roll = this.getDieRollValue(die);
-      const alignmentThreshold = die.sides === 10 ? 0.6 : 0.94;
+      const alignmentThreshold = 0.94;
 
       if (roll.alignment < alignmentThreshold) {
         die.body.wakeUp();
