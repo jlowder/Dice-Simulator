@@ -1,20 +1,20 @@
-# 🎲 Physics Dice Roller
+# Dice Roller
 
-A web-based physics simulation of dice rolling with realistic 3D graphics and physics.
+Physics-based 3D dice roller. Throw D4 through D20 against a pin wall.
 
-<video src="https://github.com/user-attachments/assets/e8934a75-0c73-444b-a039-e08eac90f2d1" width="90%" autoplay loop muted playsinline></video>
+<video src="https://github.com/user-attachments/assets/e8934a75-0c73-444b-a039-e08eac90f2d1" width="100%" autoplay loop muted playsinline></video>
 
-## Features
+## Run it
 
-- 🎲 Realistic physics simulation using Cannon.js
-- 🎨 3D rendering with Three.js
-  - 💨 GPU accelerated rendering for smooth animations
-- 🎭 Realistic lighting and shadows
+Open `index.html` in any modern browser. Click Roll Dice, watch it bounce, read the number where it lands.
 
-## Usage
+## Files
 
-Just open index.html in a web browser. It will be obvious from there 😉
+- `dice-roller.js` — Physics, 3D rendering, result detection
+- `index.html` — App wrapper and controls
+- `verify_d4_refined.py` — Automated D4 test
+- `verify_dice.py` — Multi-die test suite
 
 ## License
 
-MIT License
+MIT — see [LICENSE](LICENSE)
