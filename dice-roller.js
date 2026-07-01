@@ -316,7 +316,9 @@ class DiceRoller {
 
   createSingleDie() {
     const size = this.DICE_SIZE;
-    if (this.sides === 6) {
+    if (this.sides === 4) {
+      return this.createD4(size);
+    } else if (this.sides === 6) {
       return this.createD6(size);
     } else if (this.sides === 8) {
       return this.createD8(size);
@@ -327,6 +329,130 @@ class DiceRoller {
     } else if (this.sides === 20) {
       return this.createD20(size);
     }
+  }
+
+  createD4(size) {
+    const radius = size * 1.1;
+    let geometry = new THREE.TetrahedronGeometry(radius);
+    if (geometry.index) {
+      geometry = geometry.toNonIndexed();
+    }
+
+    const uvs = new Float32Array(geometry.attributes.position.count * 2);
+    for (let i = 0; i < geometry.attributes.position.count; i += 3) {
+      uvs[i * 2] = 0.5;
+      uvs[i * 2 + 1] = 1.0;
+      uvs[i * 2 + 2] = 0.0;
+      uvs[i * 2 + 3] = 0.0;
+      uvs[i * 2 + 4] = 1.0;
+      uvs[i * 2 + 5] = 0.0;
+    }
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+
+    const materials = [];
+    for (let i = 1; i <= 4; i++) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext("2d");
+
+      // Background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, 128, 128);
+
+      // Face outline
+      ctx.strokeStyle = "#bbbbbb";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(64, 10);
+      ctx.lineTo(10, 110);
+      ctx.lineTo(118, 110);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Number
+      ctx.fillStyle = "#111111";
+      ctx.font = "bold 70px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      const text = i.toString();
+      ctx.fillText(text, 64, 70);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+      materials.push(new THREE.MeshStandardMaterial({ map: texture }));
+    }
+
+    for (let i = 0; i < 4; i++) {
+      geometry.addGroup(i * 3, 3, i);
+    }
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    const tempGeo = new THREE.TetrahedronGeometry(radius);
+    const posAttr = tempGeo.attributes.position;
+    const vertexMap = new Map();
+    const uniqueVertices = [];
+
+    const getVertexIndex = (x, y, z) => {
+      const key = `${x.toFixed(4)},${y.toFixed(4)},${z.toFixed(4)}`;
+      if (vertexMap.has(key)) return vertexMap.get(key);
+      const index = uniqueVertices.length;
+      uniqueVertices.push(new CANNON.Vec3(x, y, z));
+      vertexMap.set(key, index);
+      return index;
+    };
+
+    const faces = [];
+    if (tempGeo.index) {
+      const indexArray = tempGeo.index.array;
+      for (let i = 0; i < indexArray.length; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(indexArray[i]), posAttr.getY(indexArray[i]), posAttr.getZ(indexArray[i])),
+          getVertexIndex(posAttr.getX(indexArray[i + 1]), posAttr.getY(indexArray[i + 1]), posAttr.getZ(indexArray[i + 1])),
+          getVertexIndex(posAttr.getX(indexArray[i + 2]), posAttr.getY(indexArray[i + 2]), posAttr.getZ(indexArray[i + 2])),
+        ]);
+      }
+    } else {
+      for (let i = 0; i < posAttr.count; i += 3) {
+        faces.push([
+          getVertexIndex(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i)),
+          getVertexIndex(posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1)),
+          getVertexIndex(posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2)),
+        ]);
+      }
+    }
+
+    const body = new CANNON.Body({
+      mass: 1,
+      shape: new CANNON.ConvexPolyhedron(uniqueVertices, faces),
+      material: this.diceMaterial,
+      angularDamping: 0.15,
+      linearDamping: 0.1,
+      allowSleep: true,
+      sleepSpeedLimit: 0.1,
+      sleepTimeLimit: 0.5,
+    });
+
+    body.position.set(0, this.SPAWN_Y, 0);
+    body.quaternion.setFromEuler(
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+      Math.random() * Math.PI,
+    );
+    this.world.addBody(body);
+
+    return {
+      mesh,
+      body,
+      sides: 4,
+      resultDeclared: false,
+      stableTime: 0,
+    };
   }
 
   createD8(size) {
@@ -594,11 +720,11 @@ class DiceRoller {
 
       // Left half: Pu, u1, l
       positions.push(Pu.x, Pu.y, Pu.z, u1.x, u1.y, u1.z, l.x, l.y, l.z);
-      uvs.push(0.5, 1.0, 1.0, vMid, 0.5, 0.0);
+      uvs.push(0.5, 1.0, 0.0, vMid, 0.5, 0.0);
 
       // Right half: Pu, l, u2
       positions.push(Pu.x, Pu.y, Pu.z, l.x, l.y, l.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 1.0, 0.5, 0.0, 0.0, vMid);
+      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, vMid);
     }
 
     // Bottom faces (CCW winding, split along vertical spine Pl-u)
@@ -609,11 +735,11 @@ class DiceRoller {
 
       // Right half: Pl, u2, l1
       positions.push(Pl.x, Pl.y, Pl.z, u2.x, u2.y, u2.z, l1.x, l1.y, l1.z);
-      uvs.push(0.5, 0.0, 0.5, 1.0, 0.0, 1.0 - vMid);
+      uvs.push(0.5, 0.0, 0.5, 1.0, 1.0, 1.0 - vMid);
 
       // Left half: Pl, l2, u2
       positions.push(Pl.x, Pl.y, Pl.z, l2.x, l2.y, l2.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 0.0, 1.0, 1.0 - vMid, 0.5, 1.0);
+      uvs.push(0.5, 0.0, 0.0, 1.0 - vMid, 0.5, 1.0);
     }
 
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -1156,8 +1282,8 @@ class DiceRoller {
 
 
     const isAtBottom = die.mesh.position.y < this.BIN_Y + 8;
-    const velocityThreshold = 0.7;
-    const angularThreshold = 0.7;
+    const velocityThreshold = die.sides === 10 ? 0.8 : 0.7;
+    const angularThreshold = die.sides === 10 ? 0.8 : 0.7;
     const isStopped =
       (die.body.velocity.length() < velocityThreshold &&
         die.body.angularVelocity.length() < angularThreshold) ||
@@ -1165,7 +1291,7 @@ class DiceRoller {
 
     if (isStopped && isAtBottom) {
       const roll = this.getDieRollValue(die);
-      const alignmentThreshold = 0.94;
+      const alignmentThreshold = die.sides === 10 ? 0.6 : die.sides === 4 ? 0.3 : 0.94;
 
       if (roll.alignment < alignmentThreshold) {
         die.body.wakeUp();
@@ -1180,7 +1306,7 @@ class DiceRoller {
 
       die.stableTime++;
       const requiredStableTime =
-        die.sides === 20 ? 80 : die.sides === 12 ? 60 : die.sides === 10 ? 50 : die.sides === 8 ? 45 : 40;
+        die.sides === 20 ? 80 : die.sides === 12 ? 60 : die.sides === 10 ? 50 : die.sides === 8 ? 45 : die.sides === 6 ? 40 : 35;
       if (die.stableTime < requiredStableTime) return;
 
       let multiplier = 1;
@@ -1211,9 +1337,9 @@ class DiceRoller {
       this.isRolling = false;
 
       const zoomZ =
-        die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : die.sides === 8 ? 2.85 : 3;
+        die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : die.sides === 8 ? 2.85 : die.sides === 6 ? 3 : 3.15;
       const zoomYOffset =
-        die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : die.sides === 8 ? 9.75 : 10;
+        die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : die.sides === 8 ? 9.75 : die.sides === 6 ? 10 : 10.25;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
     } else {
@@ -1250,7 +1376,48 @@ class DiceRoller {
 
   getDieRollValue(die) {
     const worldUp = new THREE.Vector3(0, 1, 0);
-    if (die.sides === 6) {
+    if (die.sides === 4) {
+      // D4 lands on a face, so the result is usually the face NOT on the bottom.
+      // However, most D4s are numbered such that the result is on the top vertex OR along the bottom edges.
+      // Our D4 has a number in the center of each face.
+      // So the result is the face that is NOT on the bottom.
+      // We'll find the face with the minimum dot product with worldUp (the bottom face).
+      // Then we need to know which face is "opposite" or how they are numbered.
+      // In our createD4, we just use i+1 for each face.
+      // Actually, it's easier to just pick the face that is most "up".
+      // But for a tetrahedron, no face is ever perfectly "up" when it lands on another face.
+      // The face on the bottom will have a normal pointing DOWN.
+      // The other three faces will have normals pointing partially UP.
+      // The one that is most UP might be ambiguous.
+      // Standard D4: The result is the number that is upright.
+      // Our implementation draws ONE number per face.
+      // If a D4 lands on face A, faces B, C, D are visible.
+      // Usually, D4s have 3 numbers per face, and the result is the one that's upright.
+      // If we only have one number per face, maybe the top vertex is the result?
+      // Let's assume the face with the LARGEST dot product with worldUp is the result.
+      // For a regular tetrahedron, if one face is flat on the ground (normal = [0, -1, 0]),
+      // the other three faces have normals with dot product 1/3 with worldUp.
+      // Wait, let's check geometry.
+      let maxUp = -1;
+      let topValue = 1;
+      const geometry = die.mesh.geometry;
+      const positions = geometry.attributes.position.array;
+      for (let i = 0; i < 4; i++) {
+        const idx = i * 9;
+        const vA = new THREE.Vector3(positions[idx], positions[idx + 1], positions[idx + 2]);
+        const vB = new THREE.Vector3(positions[idx + 3], positions[idx + 4], positions[idx + 5]);
+        const vC = new THREE.Vector3(positions[idx + 6], positions[idx + 7], positions[idx + 8]);
+        const cb = new THREE.Vector3().subVectors(vC, vB);
+        const ab = new THREE.Vector3().subVectors(vA, vB);
+        const normal = new THREE.Vector3().crossVectors(cb, ab).normalize().applyQuaternion(die.mesh.quaternion);
+        const dot = normal.dot(worldUp);
+        if (dot > maxUp) {
+          maxUp = dot;
+          topValue = i + 1;
+        }
+      }
+      return { value: topValue, alignment: maxUp };
+    } else if (die.sides === 6) {
       const faceVectors = [
         { vector: new THREE.Vector3(1, 0, 0), value: 1 },
         { vector: new THREE.Vector3(-1, 0, 0), value: 6 },
@@ -1307,9 +1474,9 @@ class DiceRoller {
     if (!this.isZoomedIn) {
       // Zoom closer
       const zoomZ =
-        die.sides === 20 ? 1 : die.sides === 12 ? 1.25 : die.sides === 10 ? 1.35 : die.sides === 8 ? 1.45 : 1.5;
+        die.sides === 20 ? 1 : die.sides === 12 ? 1.25 : die.sides === 10 ? 1.35 : die.sides === 8 ? 1.45 : die.sides === 6 ? 1.5 : 1.6;
       const zoomYOffset =
-        die.sides === 20 ? 4 : die.sides === 12 ? 4.5 : die.sides === 10 ? 4.75 : die.sides === 8 ? 4.85 : 5;
+        die.sides === 20 ? 4 : die.sides === 12 ? 4.5 : die.sides === 10 ? 4.75 : die.sides === 8 ? 4.85 : die.sides === 6 ? 5 : 5.15;
       this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
       this.cameraTargetLookAt.copy(die.mesh.position);
       this.isZoomedIn = true;
@@ -1318,9 +1485,9 @@ class DiceRoller {
       // Zoom back to result level or default if not settled
       if (die.resultDeclared) {
         const zoomZ =
-          die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : die.sides === 8 ? 2.85 : 3;
+          die.sides === 20 ? 2 : die.sides === 12 ? 2.5 : die.sides === 10 ? 2.75 : die.sides === 8 ? 2.85 : die.sides === 6 ? 3 : 3.15;
         const zoomYOffset =
-          die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : die.sides === 8 ? 9.75 : 10;
+          die.sides === 20 ? 8 : die.sides === 12 ? 9 : die.sides === 10 ? 9.5 : die.sides === 8 ? 9.75 : die.sides === 6 ? 10 : 10.25;
         this.cameraTargetPos.set(die.mesh.position.x, die.mesh.position.y + zoomYOffset, zoomZ);
         this.cameraTargetLookAt.copy(die.mesh.position);
       } else {
