@@ -742,11 +742,11 @@ class DiceRoller {
 
       // Right half: Pl, u2, l1
       positions.push(Pl.x, Pl.y, Pl.z, u2.x, u2.y, u2.z, l1.x, l1.y, l1.z);
-      uvs.push(0.5, 0.0, 0.5, 1.0, 1.0, 1.0 - vMid);
+      uvs.push(0.5, 0.0, 0.5, 1.0, 0.0, 1.0 - vMid);
 
       // Left half: Pl, l2, u2
       positions.push(Pl.x, Pl.y, Pl.z, l2.x, l2.y, l2.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 0.0, 0.0, 1.0 - vMid, 0.5, 1.0);
+      uvs.push(0.5, 0.0, 1.0, 1.0 - vMid, 0.5, 1.0);
     }
 
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
