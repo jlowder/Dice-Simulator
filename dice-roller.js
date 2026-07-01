@@ -727,11 +727,11 @@ class DiceRoller {
 
       // Left half: Pu, u1, l
       positions.push(Pu.x, Pu.y, Pu.z, u1.x, u1.y, u1.z, l.x, l.y, l.z);
-      uvs.push(0.5, 1.0, 1.0, vMid, 0.5, 0.0);
+      uvs.push(0.5, 1.0, 0.0, vMid, 0.5, 0.0);
 
       // Right half: Pu, l, u2
       positions.push(Pu.x, Pu.y, Pu.z, l.x, l.y, l.z, u2.x, u2.y, u2.z);
-      uvs.push(0.5, 1.0, 0.5, 0.0, 0.0, vMid);
+      uvs.push(0.5, 1.0, 0.5, 0.0, 1.0, vMid);
     }
 
     // Bottom faces (CCW winding, split along vertical spine Pl-u)
@@ -1289,8 +1289,8 @@ class DiceRoller {
 
 
     const isAtBottom = die.mesh.position.y < this.BIN_Y + 8;
-    const velocityThreshold = die.sides === 10 ? 0.8 : 0.7;
-    const angularThreshold = die.sides === 10 ? 0.8 : 0.7;
+    const velocityThreshold = 0.7;
+    const angularThreshold = 0.7;
     const isStopped =
       (die.body.velocity.length() < velocityThreshold &&
         die.body.angularVelocity.length() < angularThreshold) ||
@@ -1298,7 +1298,7 @@ class DiceRoller {
 
     if (isStopped && isAtBottom) {
       const roll = this.getDieRollValue(die);
-      const alignmentThreshold = die.sides === 10 ? 0.6 : die.sides === 4 ? 0.3 : 0.94;
+      const alignmentThreshold = die.sides === 10 ? 0.6 : die.sides === 4 ? 0.9 : 0.94;
 
       if (roll.alignment < alignmentThreshold) {
         die.body.wakeUp();
@@ -1396,14 +1396,15 @@ class DiceRoller {
       let maxUp = -Infinity;
       let topVertexIndex = 0;
       for (let i = 0; i < localVertices.length; i++) {
-        const worldV = localVertices[i].clone().applyQuaternion(die.mesh.quaternion);
-        if (worldV.y > maxUp) {
-          maxUp = worldV.y;
+        const worldV = localVertices[i].clone().applyQuaternion(die.mesh.quaternion).normalize();
+        const dot = worldV.dot(worldUp);
+        if (dot > maxUp) {
+          maxUp = dot;
           topVertexIndex = i;
         }
       }
       // Vertex 0 -> 1, Vertex 1 -> 2, Vertex 2 -> 3, Vertex 3 -> 4
-      return { value: topVertexIndex + 1, alignment: 1.0 }; // alignment 1.0 as it's always stable if stopped
+      return { value: topVertexIndex + 1, alignment: maxUp };
     } else if (die.sides === 6) {
       const faceVectors = [
         { vector: new THREE.Vector3(1, 0, 0), value: 1 },
